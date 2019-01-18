@@ -6,13 +6,13 @@ namespace NHibernate.Dialect.Lock
 	/// A strategy abstraction for how locks are obtained in the underlying database.
 	/// </summary>
 	/// <remarks>
-	/// All locking provided implemenations assume the underlying database supports
+	/// All locking provided implementations assume the underlying database supports
 	/// (and that the connection is in) at least read-committed transaction isolation.
 	/// The most glaring exclusion to this is HSQLDB which only offers support for
 	/// READ_UNCOMMITTED isolation.
 	/// </remarks>
 	/// <seealso cref="NHibernate.Dialect.Dialect.GetLockingStrategy"/>
-	public interface ILockingStrategy
+	public partial interface ILockingStrategy
 	{
 		/// <summary> 
 		/// Acquire an appropriate type of lock on the underlying data that will

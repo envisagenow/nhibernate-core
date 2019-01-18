@@ -1,8 +1,9 @@
 ﻿using System.Linq;
 using NHibernate.Cfg;
+using NHibernate.Driver;
 using NHibernate.Hql.Ast.ANTLR;
+using NHibernate.Util;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.Hql.Ast
 {
@@ -12,7 +13,8 @@ namespace NHibernate.Test.Hql.Ast
 		protected override bool AppliesTo(Dialect.Dialect dialect)
 		{
 			return dialect.SupportsVariableLimit
-				&& !(Dialect is Dialect.MsSql2000Dialect &&  cfg.Properties[Environment.ConnectionDriver] == typeof(Driver.OdbcDriver).FullName); // don't know why, but these tests don't work on SQL Server using ODBC
+				&& !(Dialect is Dialect.MsSql2000Dialect && // don't know why, but these tests don't work on SQL Server using ODBC
+					typeof(OdbcDriver).IsAssignableFrom(ReflectHelper.ClassForName(cfg.GetProperty(Environment.ConnectionDriver)))); 
 		}
 
 		protected override void OnSetUp()
@@ -97,7 +99,7 @@ namespace NHibernate.Test.Hql.Ast
 				.SetInt32("pSkip", 1)
 				.SetInt32("pTake", 3).List<Human>().Select(h => h.BodyWeight).ToArray();
 			var expected = new[] {6f, 10f, 15f};
-			actual.Should().Have.SameSequenceAs(expected);
+			Assert.That(actual, Is.EquivalentTo(expected));
 
 			txn.Commit();
 			s.Close();
@@ -114,7 +116,7 @@ namespace NHibernate.Test.Hql.Ast
 				.SetInt32("pSkip", 1)
 				.SetInt32("pTake", 4).List<Human>().Select(h => h.BodyWeight).ToArray();
 			var expected = new[] {10f, 15f};
-			actual.Should().Have.SameSequenceAs(expected);
+			Assert.That(actual, Is.EquivalentTo(expected));
 
 			txn.Commit();
 			s.Close();
@@ -128,7 +130,7 @@ namespace NHibernate.Test.Hql.Ast
 
 			float[] actual = s.CreateQuery("from Human h order by h.bodyWeight skip :jump").SetInt32("jump", 2).List<Human>().Select(h => h.BodyWeight).ToArray();
 			var expected = new[] {10f, 15f, 20f};
-			actual.Should().Have.SameSequenceAs(expected);
+			Assert.That(actual, Is.EquivalentTo(expected));
 
 			txn.Commit();
 			s.Close();

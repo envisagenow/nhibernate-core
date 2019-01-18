@@ -1,21 +1,41 @@
 using System;
+using NHibernate.Mapping.ByCode.Impl;
 using NHibernate.Type;
+using NHibernate.Util;
 
 namespace NHibernate.Mapping.ByCode
 {
-	public interface IIdMapper : IAccessorPropertyMapper
+	public interface IIdMapper : IAccessorPropertyMapper, IColumnsMapper
 	{
 		void Generator(IGeneratorDef generator);
 		void Generator(IGeneratorDef generator, Action<IGeneratorMapper> generatorMapping);
 
 		void Type(IIdentifierType persistentType);
-		//void Type<TPersistentType>() where TPersistentType : IIdentifierType;
-		//void Type<TPersistentType>(object parameters) where TPersistentType : IIdentifierType;
-		//void Type(System.System.Type persistentType, object parameters);
-		//void Column(Action<IColumnMapper> columnMapper);
-		//void Columns(params Action<IColumnMapper>[] columnMapper);
 		void UnsavedValue(object value);
-		void Column(string name);
 		void Length(int length);
+	}
+
+	public static class IdMapperExtensions
+	{
+		public static void Type<TPersistentType>(this IIdMapper idMapper)
+		{
+			Type<TPersistentType>(idMapper, null);
+		}
+
+		public static void Type<TPersistentType>(this IIdMapper idMapper, object parameters)
+		{
+			Type(idMapper, typeof (TPersistentType), parameters);
+		}
+
+		// 6.0 TODO: move into IIdMapper,
+		// and probably add an ITypeMapper for mutualizing it with IElementMapper and IPropertyMapper
+		// (Note that there is no IKeyPropertyMapper to be concerned with, the KeyPropertyMapper use IPropertyMapper
+		// directly instead.)
+		public static void Type(this IIdMapper idMapper, System.Type persistentType, object parameters)
+		{
+			ReflectHelper
+				.CastOrThrow<IdMapper>(idMapper, "Type method with a type argument")
+				.Type(persistentType, parameters);
+		}
 	}
 }

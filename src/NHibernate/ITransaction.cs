@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Data.Common;
 using NHibernate.Transaction;
 
 namespace NHibernate
@@ -9,14 +10,14 @@ namespace NHibernate
 	/// underlying transaction implementation
 	/// </summary>
 	/// <remarks>
-	/// A transaction is associated with a <c>ISession</c> and is usually instanciated by a call to
+	/// A transaction is associated with a <c>ISession</c> and is usually instantiated by a call to
 	/// <c>ISession.BeginTransaction()</c>. A single session might span multiple transactions since 
 	/// the notion of a session (a conversation between the application and the datastore) is of
 	/// coarser granularity than the notion of a transaction. However, it is intended that there be
 	/// at most one uncommitted <c>ITransaction</c> associated with a particular <c>ISession</c>
 	/// at a time. Implementors are not intended to be threadsafe.
 	/// </remarks>
-	public interface ITransaction : IDisposable
+	public partial interface ITransaction : IDisposable
 	{
 		/// <summary>
 		/// Begin the transaction with the default isolation level.
@@ -62,19 +63,52 @@ namespace NHibernate
 		bool WasCommitted { get; }
 
 		/// <summary>
-		/// Enlist the <see cref="IDbCommand"/> in the current Transaction.
+		/// Enlist the <see cref="DbCommand"/> in the current Transaction.
 		/// </summary>
-		/// <param name="command">The <see cref="IDbCommand"/> to enlist.</param>
+		/// <param name="command">The <see cref="DbCommand"/> to enlist.</param>
 		/// <remarks>
 		/// It is okay for this to be a no op implementation.
 		/// </remarks>
-		void Enlist(IDbCommand command);
-	 
+		void Enlist(DbCommand command);
 
+		// Obsolete since 5.2
 		/// <summary>
 		/// Register a user synchronization callback for this transaction.
 		/// </summary>
 		/// <param name="synchronization">The <see cref="ISynchronization"/> callback to register.</param>
+		[Obsolete("Use RegisterSynchronization(ITransactionCompletionSynchronization) extension method instead. " +
+			"If implementing ITransaction, implement a 'public void " +
+			"RegisterSynchronization(ITransactionCompletionSynchronization)': the TransactionExtensions extension " +
+			"method will call it.")]
 		void RegisterSynchronization(ISynchronization synchronization);
+	}
+
+	// 6.0 TODO: merge into ITransaction
+	public static class TransactionExtensions
+	{
+		/// <summary>
+		/// Register an user synchronization callback for this transaction.
+		/// </summary>
+		/// <param name="transaction">The transaction.</param>
+		/// <param name="synchronization">The <see cref="ISynchronization"/> callback to register.</param>
+		public static void RegisterSynchronization(
+			this ITransaction transaction,
+			ITransactionCompletionSynchronization synchronization)
+		{
+			if (transaction is AdoTransaction adoTransaction)
+			{
+				adoTransaction.RegisterSynchronization(synchronization);
+				return;
+			}
+
+			// Use reflection for supporting custom transaction factories and transaction implementations.
+			var registerMethod = transaction.GetType().GetMethod(
+				nameof(AdoTransaction.RegisterSynchronization),
+				new[] { typeof(ITransactionCompletionSynchronization) });
+			if (registerMethod == null)
+				throw new NotSupportedException(
+					$"{transaction.GetType()} does not support {nameof(ITransactionCompletionSynchronization)}");
+			registerMethod.Invoke(transaction, new object[] { synchronization });
+		}
 	}
 }

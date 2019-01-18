@@ -1,13 +1,15 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using NHibernate.Cfg;
 using NHibernate.Criterion;
 using NHibernate.Test.SecondLevelCacheTests;
 using NUnit.Framework;
+using Environment = NHibernate.Cfg.Environment;
 
 namespace NHibernate.Test.QueryTest
 {
-	[TestFixture]
+	[TestFixture, Obsolete]
 	public class MultiCriteriaFixture : TestCase
 	{
 		protected override string MappingsAssembly
@@ -15,7 +17,7 @@ namespace NHibernate.Test.QueryTest
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "SecondLevelCacheTest.Item.hbm.xml" }; }
 		}
@@ -23,6 +25,20 @@ namespace NHibernate.Test.QueryTest
 		protected override bool AppliesTo(Engine.ISessionFactoryImplementor factory)
 		{
 			return factory.ConnectionProvider.Driver.SupportsMultipleQueries;
+		}
+
+		protected override void Configure(Configuration configuration)
+		{
+			base.Configure(configuration);
+
+			configuration.SetProperty(Environment.GenerateStatistics, "true");
+		}
+
+		protected override void OnSetUp()
+		{
+			base.OnSetUp();
+
+			this.Sfi.Statistics.Clear();
 		}
 
 		protected override void OnTearDown()
@@ -106,7 +122,7 @@ namespace NHibernate.Test.QueryTest
 		[Test]
 		public void CanUseSecondLevelCacheWithPositionalParameters()
 		{
-			var cacheHashtable = MultipleQueriesFixture.GetHashTableUsedAsQueryCache(sessions);
+			var cacheHashtable = MultipleQueriesFixture.GetHashTableUsedAsQueryCache(Sfi);
 			cacheHashtable.Clear();
 
 			CreateItems();
@@ -123,7 +139,7 @@ namespace NHibernate.Test.QueryTest
 			//set the query in the cache
 			DoMutiQueryAndAssert();
 
-			var cacheHashtable = MultipleQueriesFixture.GetHashTableUsedAsQueryCache(sessions);
+			var cacheHashtable = MultipleQueriesFixture.GetHashTableUsedAsQueryCache(Sfi);
 			var cachedListEntry = (IList)new ArrayList(cacheHashtable.Values)[0];
 			var cachedQuery = (IList)cachedListEntry[1];
 
@@ -135,7 +151,7 @@ namespace NHibernate.Test.QueryTest
 			var secondQueryResults = (IList)cachedQuery[1];
 			secondQueryResults[0] = 2;
 
-			using (var s = sessions.OpenSession())
+			using (var s = Sfi.OpenSession())
 			{
 				var criteria = s.CreateCriteria(typeof(Item))
 					.Add(Restrictions.Gt("id", 50));
@@ -149,6 +165,22 @@ namespace NHibernate.Test.QueryTest
 				var count = (int)((IList)results[1])[0];
 				Assert.AreEqual(2L, count);
 			}
+		}
+
+		[Test]
+		public void CanUpdateStatisticsWhenGetMultiQueryFromSecondLevelCache()
+		{
+			CreateItems();
+
+			DoMutiQueryAndAssert();
+			Assert.AreEqual(0, Sfi.Statistics.QueryCacheHitCount);
+			Assert.AreEqual(1, Sfi.Statistics.QueryCacheMissCount);
+			Assert.AreEqual(1, Sfi.Statistics.QueryCachePutCount);
+
+			DoMutiQueryAndAssert();
+			Assert.AreEqual(1, Sfi.Statistics.QueryCacheHitCount);
+			Assert.AreEqual(1, Sfi.Statistics.QueryCacheMissCount);
+			Assert.AreEqual(1, Sfi.Statistics.QueryCachePutCount);
 		}
 
 		[Test]
@@ -248,7 +280,7 @@ namespace NHibernate.Test.QueryTest
 			using (var session = OpenSession())
 			{
 				var multiCriteria = session.CreateMultiCriteria();
-				
+
 				var firstCriteria = session.CreateCriteria(typeof(Item))
 					.Add(Restrictions.Lt("id", 50));
 
@@ -275,7 +307,7 @@ namespace NHibernate.Test.QueryTest
 
 				var firstCriteria = DetachedCriteria.For(typeof(Item))
 					.Add(Restrictions.Lt("id", 50));
-					
+
 				var secondCriteria = DetachedCriteria.For(typeof(Item));
 
 				multiCriteria.Add("firstCriteria", firstCriteria);
@@ -453,6 +485,66 @@ namespace NHibernate.Test.QueryTest
 
 				Assert.That(results[0], Is.InstanceOf<List<object>>());
 				Assert.That(results[1], Is.InstanceOf<List<int>>());
+			}
+		}
+
+		[Test]
+		public void UsingManyParametersAndQueries_DoesNotCauseParameterNameCollisions()
+		{
+			//GH-1357
+			using (var s = OpenSession())
+			{
+				var item = new Item {Id = 15};
+				s.Save(item);
+				s.Flush();
+			}
+
+			using (var s = OpenSession())
+			{
+				var multi = s.CreateMultiCriteria();
+
+				for (var i = 0; i < 12; i++)
+				{
+					var criteria = s.CreateCriteria(typeof(Item));
+					for (var j = 0; j < 12; j++)
+					{
+						criteria = criteria.Add(Restrictions.Gt("id", j));
+					}
+					multi.Add(criteria);
+				}
+				//Parameter combining is only used for cacheable queries
+				multi.SetCacheable(true);
+				foreach (IList result in multi.List())
+				{
+					Assert.That(result.Count, Is.EqualTo(1));
+				}
+			}
+		}
+
+		//NH-2428 - Session.MultiCriteria and FlushMode.Auto inside transaction (GH865)
+		[Test]
+		public void MultiCriteriaAutoFlush()
+		{
+			using (var s = OpenSession())
+			using (var tx = s.BeginTransaction())
+			{
+				s.FlushMode = FlushMode.Auto;
+				var p1 = new Item
+				{
+					Name = "Person name",
+					Id = 15
+				};
+				s.Save(p1);
+				s.Flush();
+
+				s.Delete(p1);
+				var multi = s.CreateMultiCriteria();
+				multi.Add<int>(s.QueryOver<Item>().ToRowCountQuery());
+				var count = (int) ((IList) multi.List()[0])[0];
+				tx.Commit();
+
+				Assert.That(count, Is.EqualTo(0), "Session wasn't auto flushed.");
+
 			}
 		}
 	}

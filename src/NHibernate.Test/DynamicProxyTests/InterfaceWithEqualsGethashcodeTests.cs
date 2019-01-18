@@ -1,10 +1,12 @@
+using System;
 using System.Collections.Generic;
 using NHibernate.Proxy.DynamicProxy;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.DynamicProxyTests
 {
+	[TestFixture]
+	[Obsolete]
 	public class InterfaceWithEqualsGethashcodeTests
 	{
 		public interface IMyBaseObject
@@ -38,7 +40,7 @@ namespace NHibernate.Test.DynamicProxyTests
 			var interceptor = new InterceptedMethodsExposer();
 			var proxy = proxyFactory.CreateProxy(typeof(IHasSomething), interceptor, null);
 			proxy.Equals(null);
-			interceptor.InterceptedMethods.Should().Contain("Equals");
+			Assert.That(interceptor.InterceptedMethods, Contains.Item("Equals"));
 		}
 	}
 }

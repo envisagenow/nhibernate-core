@@ -1,51 +1,62 @@
 using System;
+using System.Linq;
 using System.Linq.Expressions;
+using NHibernate.Linq.Expressions;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Clauses.ResultOperators;
 using Remotion.Linq.Parsing;
-using Remotion.Linq.Parsing.ExpressionTreeVisitors;
+using Remotion.Linq.Parsing.ExpressionVisitors;
 
 namespace NHibernate.Linq.GroupBy
 {
-	internal class GroupBySelectClauseRewriter : ExpressionTreeVisitor
+	//This should be renamed. It handles entire querymodels, not just select clauses
+	internal class GroupBySelectClauseRewriter : RelinqExpressionVisitor
 	{
 		public static Expression ReWrite(Expression expression, GroupResultOperator groupBy, QueryModel model)
 		{
 			var visitor = new GroupBySelectClauseRewriter(groupBy, model);
-			return TransparentIdentifierRemovingExpressionTreeVisitor.ReplaceTransparentIdentifiers(visitor.VisitExpression(expression));
+			return TransparentIdentifierRemovingExpressionVisitor.ReplaceTransparentIdentifiers(visitor.Visit(expression));
 		}
 
 		private readonly GroupResultOperator _groupBy;
 		private readonly QueryModel _model;
+		private readonly Expression _nominatedKeySelector;
 
 		private GroupBySelectClauseRewriter(GroupResultOperator groupBy, QueryModel model)
 		{
 			_groupBy = groupBy;
 			_model = model;
+			_nominatedKeySelector = GroupKeyNominator.Visit(groupBy);
 		}
 
-		protected override Expression VisitQuerySourceReferenceExpression(QuerySourceReferenceExpression expression)
+		protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression expression)
 		{
-			if (expression.ReferencedQuerySource == _groupBy)
+			if (!IsMemberOfModel(expression))
+			{
+				return base.VisitQuerySourceReference(expression);
+			}
+
+			if (expression.IsGroupingElementOf(_groupBy))
 			{
 				return _groupBy.ElementSelector;
 			}
 
-			return base.VisitQuerySourceReferenceExpression(expression);
+			return base.VisitQuerySourceReference(expression);
 		}
 
-		protected override Expression VisitMemberExpression(MemberExpression expression)
+		protected override Expression VisitMember(MemberExpression expression)
 		{
 			if (!IsMemberOfModel(expression))
 			{
-				return base.VisitMemberExpression(expression);
+				return base.VisitMember(expression);
 			}
 
-			if (expression.Member.Name == "Key")
+			if (expression.IsGroupingKeyOf(_groupBy))
 			{
-				return _groupBy.KeySelector;
+				// If we have referenced the Key, then return the nominated key expression
+				return _nominatedKeySelector;
 			}
 
 			var elementSelector = _groupBy.ElementSelector;
@@ -53,10 +64,11 @@ namespace NHibernate.Linq.GroupBy
 			if ((elementSelector is MemberExpression) || (elementSelector is QuerySourceReferenceExpression))
 			{
 				// If ElementSelector is MemberExpression, just return
-				return base.VisitMemberExpression(expression);
+				return base.VisitMember(expression);
 			}
 
-			if (elementSelector is NewExpression && elementSelector.Type == expression.Expression.Type)
+			if ((elementSelector is NewExpression || elementSelector.NodeType == ExpressionType.Convert)
+				&& elementSelector.Type == expression.Expression.Type)
 			{
 				//TODO: probably we should check this with a visitor
 				return Expression.MakeMemberAccess(elementSelector, expression.Member);
@@ -75,7 +87,12 @@ namespace NHibernate.Linq.GroupBy
 				return false;
 			}
 
-			var fromClause = querySourceRef.ReferencedQuerySource as FromClauseBase;
+			return IsMemberOfModel(querySourceRef);
+		}
+		
+		private bool IsMemberOfModel(QuerySourceReferenceExpression expression)
+		{
+			var fromClause = expression.ReferencedQuerySource as FromClauseBase;
 
 			if (fromClause == null)
 			{
@@ -103,8 +120,38 @@ namespace NHibernate.Linq.GroupBy
 			return subQuery2 != null && subQuery2.QueryModel == _model;
 		}
 
-		protected override Expression VisitSubQueryExpression(SubQueryExpression expression)
+		protected override Expression VisitSubQuery(SubQueryExpression expression)
 		{
+			//If the subquery is a Count(*) aggregate with a condition
+			if (expression.QueryModel.MainFromClause.FromExpression.Type == _groupBy.ItemType)
+			{
+				var where = expression.QueryModel.BodyClauses.OfType<WhereClause>().FirstOrDefault();
+				if (where != null &&
+				    expression.QueryModel.SelectClause.Selector is NhCountExpression countExpression &&
+				    countExpression.Expression is NhStarExpression)
+				{
+					//return it as a CASE [column] WHEN [predicate] THEN 1 ELSE NULL END
+					return
+						countExpression.CreateNew(
+							Expression.Condition(
+								where.Predicate,
+								Expression.Constant(1, typeof(int?)),
+								Expression.Constant(null, typeof(int?))));
+				}
+			}
+
+			//In the subquery body clauses, references to the grouping key should be restored to the KeySelector expression. NOT the resolved value.
+			//This feels a bit backwards, but solving it here is probably a smaller operation than fixing the previous rewriting
+			if (expression.QueryModel.BodyClauses.Any())
+			{
+				foreach (var bodyClause in expression.QueryModel.BodyClauses)
+				{
+					bodyClause.TransformExpressions((e) => new KeySelectorVisitor(_groupBy).Visit(e));
+				}
+				return base.VisitSubQuery(expression);
+			}
+
+
 			// TODO - is this safe?  All we are extracting is the select clause from the sub-query.  Assumes that everything
 			// else in the subquery has been removed.  If there were two subqueries, one aggregating & one not, this may not be a 
 			// valid assumption.  Should probably be passed a list of aggregating subqueries that we are flattening so that we can check...

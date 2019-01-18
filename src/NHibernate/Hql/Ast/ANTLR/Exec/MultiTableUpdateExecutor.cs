@@ -16,9 +16,9 @@ using IQueryable = NHibernate.Persister.Entity.IQueryable;
 namespace NHibernate.Hql.Ast.ANTLR.Exec
 {
 	[CLSCompliant(false)]
-	public class MultiTableUpdateExecutor : AbstractStatementExecutor
+	public partial class MultiTableUpdateExecutor : AbstractStatementExecutor
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof (MultiTableDeleteExecutor));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof (MultiTableDeleteExecutor));
 		private readonly IQueryable persister;
 		private readonly SqlString idInsertSelect;
 		private readonly SqlString[] updates;
@@ -37,10 +37,10 @@ namespace NHibernate.Hql.Ast.ANTLR.Exec
 			persister = fromElement.Queryable;
 
 			idInsertSelect = GenerateIdInsertSelect(persister, bulkTargetAlias, updateStatement.WhereClause);
-			log.Debug("Generated ID-INSERT-SELECT SQL (multi-table update) : " + idInsertSelect);
+			log.Debug("Generated ID-INSERT-SELECT SQL (multi-table update) : {0}", idInsertSelect);
 
 			string[] tableNames = persister.ConstraintOrderedTableNameClosure;
-			string[][] columnNames = persister.ContraintOrderedTableKeyColumnClosure;
+			string[][] columnNames = persister.ConstraintOrderedTableKeyColumnClosure;
 
 			string idSubselect = GenerateIdSubselect(persister);
 			IList<AssignmentSpecification> assignmentSpecifications = Walker.AssignmentSpecifications;
@@ -97,7 +97,7 @@ namespace NHibernate.Hql.Ast.ANTLR.Exec
 			try
 			{
 				// First, save off the pertinent ids, as the return value
-				IDbCommand ps = null;
+				DbCommand ps = null;
 				int resultCount;
 				try
 				{
@@ -110,10 +110,11 @@ namespace NHibernate.Hql.Ast.ANTLR.Exec
 						List<IParameterSpecification> whereParams = (new List<IParameterSpecification>(allParams)).GetRange(
 							parameterStart, allParams.Count - parameterStart);
 
-						var sqlQueryParametersList = idInsertSelect.GetParameters().ToList();
+						var sqlString = FilterHelper.ExpandDynamicFilterParameters(idInsertSelect, whereParams, session);
+						var sqlQueryParametersList = sqlString.GetParameters().ToList();
 						SqlType[] parameterTypes = whereParams.GetQueryParameterTypes(sqlQueryParametersList, session.Factory);
 
-						ps = session.Batcher.PrepareCommand(CommandType.Text, idInsertSelect, parameterTypes);
+						ps = session.Batcher.PrepareCommand(CommandType.Text, sqlString, parameterTypes);
 						foreach (var parameterSpecification in whereParams)
 						{
 							parameterSpecification.Bind(ps, sqlQueryParametersList, parameters, session);

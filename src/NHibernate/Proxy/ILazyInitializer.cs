@@ -2,7 +2,7 @@ using NHibernate.Engine;
 
 namespace NHibernate.Proxy
 {
-	public interface ILazyInitializer
+	public partial interface ILazyInitializer
 	{
 		/// <summary>
 		/// Perform an ImmediateLoad of the actual object for the Proxy.
@@ -28,7 +28,7 @@ namespace NHibernate.Proxy
 		System.Type PersistentClass { get; }
 
 		/// <summary>
-		/// Is the proxy uninitialzed?
+		/// Is the proxy uninitialized?
 		/// </summary>
 		bool IsUninitialized { get; }
 

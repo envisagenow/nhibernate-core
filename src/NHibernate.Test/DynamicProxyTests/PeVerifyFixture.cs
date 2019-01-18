@@ -1,12 +1,14 @@
 using System;
-using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
 using NUnit.Framework;
 using NHibernate.Proxy.DynamicProxy;
+using NHibernate.Test.ProxyTest;
 
 namespace NHibernate.Test.DynamicProxyTests
 {
+	[TestFixture]
+	[Obsolete]
 	public class PeVerifyFixture
 	{
 		private static bool wasCalled;
@@ -124,7 +126,7 @@ namespace NHibernate.Test.DynamicProxyTests
 			public AssemblyBuilder DefineDynamicAssembly(AppDomain appDomain, AssemblyName name)
 			{
 				AssemblyBuilderAccess access = AssemblyBuilderAccess.RunAndSave;
-				return appDomain.DefineDynamicAssembly(new AssemblyName(assemblyName), access);
+				return appDomain.DefineDynamicAssembly(new AssemblyName(assemblyName), access, TestContext.CurrentContext.TestDirectory);
 			}
 
 			public ModuleBuilder DefineDynamicModule(AssemblyBuilder assemblyBuilder, string moduleName)

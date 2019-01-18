@@ -87,13 +87,13 @@ namespace NHibernate.Hql.Util
 			{
 				return (IQueryableCollection)sfi.GetCollectionPersister(role);
 			}
-			catch (InvalidCastException)
+			catch (InvalidCastException ice)
 			{
-				throw new QueryException("collection is not queryable: " + role);
+				throw new QueryException("collection is not queryable: " + role, ice);
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
-				throw new QueryException("collection not found: " + role);
+				throw new QueryException("collection not found: " + role, ex);
 			}
 		}
 
@@ -156,9 +156,9 @@ namespace NHibernate.Hql.Util
 
 
 		/// <summary>
-		/// Retreive a PropertyMapping describing the given collection role.
+		/// Retrieve a PropertyMapping describing the given collection role.
 		/// </summary>
-		/// <param name="role">The collection role for whcih to retrieve the property mapping.</param>
+		/// <param name="role">The collection role for which to retrieve the property mapping.</param>
 		/// <returns>The property mapping.</returns>
 		public IPropertyMapping GetCollectionPropertyMapping(String role)
 		{
@@ -186,15 +186,15 @@ namespace NHibernate.Hql.Util
 				}
 				return queryableCollection;
 			}
-			catch (InvalidCastException)
+			catch (InvalidCastException ice)
 			{
 				throw new QueryException(
-						"collection role is not queryable: " + role);
+						"collection role is not queryable: " + role, ice);
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
 				throw new QueryException("collection role not found: "
-						+ role);
+						+ role, ex);
 			}
 		}
 	}

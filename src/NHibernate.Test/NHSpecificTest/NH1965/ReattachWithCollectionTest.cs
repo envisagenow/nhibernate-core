@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH1965
 {
@@ -24,12 +23,17 @@ namespace NHibernate.Test.NHSpecificTest.NH1965
 			var mapper = new ModelMapper();
 			// Note: DeleteOrphans has no sense, only added to match the case reported.
 			mapper.Class<Cat>(cm =>
-			                  {
-			                  	cm.Id(x => x.Id, map => map.Generator(Generators.Identity));
+							  {
+								cm.Id(x => x.Id, map => map.Generator(Generators.Identity));
 													cm.Bag(x => x.Children, map => map.Cascade(Mapping.ByCode.Cascade.All.Include(Mapping.ByCode.Cascade.DeleteOrphans)), rel => rel.OneToMany());
-			                  });
+							  });
 			var mappings = mapper.CompileMappingForAllExplicitlyAddedEntities();
 			return mappings;
+		}
+
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			return TestDialect.SupportsEmptyInserts;
 		}
 
 		[Test]
@@ -45,7 +49,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1965
 
 			using (var session = OpenSession())
 			{
-				session.Executing(x => x.Lock(cat, LockMode.None)).NotThrows();
+				Assert.That(() => session.Lock(cat, LockMode.None), Throws.Nothing);
 			}
 
 			using (var session = OpenSession())

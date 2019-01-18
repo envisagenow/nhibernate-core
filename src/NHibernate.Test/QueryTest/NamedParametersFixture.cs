@@ -11,7 +11,7 @@ namespace NHibernate.Test.QueryTest
 	[TestFixture]
 	public class NamedParametersFixture : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] {"Simple.hbm.xml"}; }
 		}
@@ -45,7 +45,7 @@ namespace NHibernate.Test.QueryTest
 		[Test]
 		public void TestNullNamedParameter()
 		{
-			if (sessions.Settings.QueryTranslatorFactory is ASTQueryTranslatorFactory)
+			if (Sfi.Settings.QueryTranslatorFactory is ASTQueryTranslatorFactory)
 			{
 				Assert.Ignore("Not supported; The AST parser can guess the type.");
 			}

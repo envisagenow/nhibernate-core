@@ -1,5 +1,6 @@
-﻿using NUnit.Framework;
-using SharpTestsEx;
+﻿using System;
+using NUnit.Framework;
+using NHibernate.Multi;
 
 namespace NHibernate.Test.NHSpecificTest.NH1508
 {
@@ -44,7 +45,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1508
 			}
 		}
 
-		[Test]
+		[Test, Obsolete]
 		public void DoesntThrowExceptionWhenHqlQueryIsGiven()
 		{
 			using (var session = OpenSession())
@@ -59,6 +60,20 @@ namespace NHibernate.Test.NHSpecificTest.NH1508
 		}
 
 		[Test]
+		public void DoesntThrowExceptionWhenHqlQueryIsGivenToQueryBatch()
+		{
+			using (var session = OpenSession())
+			using (session.BeginTransaction())
+			{
+				var sqlQuery = session.CreateQuery("from Document");
+				var q = session
+				        .CreateQueryBatch()
+				        .Add<Document>(sqlQuery);
+				q.Execute();
+			}
+		}
+
+		[Test, Obsolete]
 		public void DoesntThrowsExceptionWhenSqlQueryIsGiven()
 		{
 			using (var session = OpenSession())
@@ -66,11 +81,24 @@ namespace NHibernate.Test.NHSpecificTest.NH1508
 			{
 				var sqlQuery = session.CreateSQLQuery("select * from Document");
 				var multiquery = session.CreateMultiQuery();
-				multiquery.Executing(x => x.Add(sqlQuery)).NotThrows();
+				Assert.That(() => multiquery.Add(sqlQuery), Throws.Nothing);
 			}
 		}
 
 		[Test]
+		public void DoesntThrowsExceptionWhenSqlQueryIsGivenToQueryBatch()
+		{
+			using (var session = OpenSession())
+			using (session.BeginTransaction())
+			{
+				var sqlQuery = session.CreateSQLQuery("select * from Document");
+				var multiquery = session.CreateQueryBatch();
+				Assert.That(() => multiquery.Add<object[]>(sqlQuery), Throws.Nothing);
+				Assert.That(multiquery.Execute, Throws.Nothing);
+			}
+		}
+
+		[Test, Obsolete]
 		public void DoesntThrowsExceptionWhenNamedSqlQueryIsGiven()
 		{
 			using (var session = OpenSession())
@@ -78,7 +106,21 @@ namespace NHibernate.Test.NHSpecificTest.NH1508
 			{
 
 				var multiquery = session.CreateMultiQuery();
-				multiquery.Executing(x => x.AddNamedQuery("SampleSqlQuery")).NotThrows();
+				Assert.That(() => multiquery.AddNamedQuery("SampleSqlQuery"), Throws.Nothing);
+			}
+		}
+
+		[Test]
+		public void DoesntThrowsExceptionWhenNamedSqlQueryIsGivenToQueryBatch()
+		{
+			using (var session = OpenSession())
+			using (session.BeginTransaction())
+			{
+
+				var multiquery = session.CreateQueryBatch();
+				var q = session.GetNamedQuery("SampleSqlQuery");
+				Assert.That(() => multiquery.Add<int>(q), Throws.Nothing);
+				Assert.That(multiquery.Execute, Throws.Nothing);
 			}
 		}
 	}

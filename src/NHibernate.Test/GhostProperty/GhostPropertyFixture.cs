@@ -3,7 +3,6 @@ using NHibernate.Cfg;
 using NHibernate.Cfg.Loquacious;
 using NHibernate.Tuple.Entity;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.GhostProperty
 {
@@ -17,7 +16,7 @@ namespace NHibernate.Test.GhostProperty
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "GhostProperty.Mappings.hbm.xml" }; }
 		}
@@ -37,6 +36,11 @@ namespace NHibernate.Test.GhostProperty
 					Id = 1
 				};
 				s.Persist(wireTransfer);
+				var creditCard = new CreditCard
+				{
+					Id = 2
+				};
+				s.Persist(creditCard);
 				s.Persist(new Order
 				{
 					Id = 1,
@@ -58,12 +62,13 @@ namespace NHibernate.Test.GhostProperty
 			}
 		}
 
-		protected override void BuildSessionFactory()
+		protected override DebugSessionFactory BuildSessionFactory()
 		{
 			using (var logSpy = new LogSpy(typeof(EntityMetamodel)))
 			{
-				base.BuildSessionFactory();
+				var factory = base.BuildSessionFactory();
 				log = logSpy.GetWholeLog();
+				return factory;
 			}
 		}
 
@@ -81,6 +86,71 @@ namespace NHibernate.Test.GhostProperty
 				var order = s.Get<Order>(1);
 
 				Assert.IsTrue(order.Payment is WireTransfer);
+			}
+		}
+
+		[Test]
+		public void CanGetInitializedLazyManyToOneAfterClosedSession()
+		{
+			Order order;
+			Payment payment;
+
+			using (var s = OpenSession())
+			{
+				order = s.Get<Order>(1);
+				payment = order.Payment; // Initialize Payment
+			}
+
+			Assert.That(order.Payment, Is.EqualTo(payment));
+			Assert.That(order.Payment is WireTransfer, Is.True);
+		}
+
+		[Test]
+		public void InitializedLazyManyToOneBeforeParentShouldNotBeAProxy()
+		{
+			Order order;
+			Payment payment;
+
+			using (var s = OpenSession())
+			{
+				payment = s.Load<Payment>(1);
+				NHibernateUtil.Initialize(payment);
+				order = s.Get<Order>(1);
+				// Here the Payment property should be unwrapped
+				payment = order.Payment;
+			}
+
+			Assert.That(order.Payment, Is.EqualTo(payment));
+			Assert.That(order.Payment is WireTransfer, Is.True);
+		}
+
+		[Test]
+		public void SetUninitializedProxyShouldNotTriggerPropertyInitialization()
+		{
+			using (var s = OpenSession())
+			{
+				var order = s.Get<Order>(1);
+				Assert.That(order.Payment is WireTransfer, Is.True); // Load property
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "Payment"), Is.True);
+				order.Payment = s.Load<Payment>(2);
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "Payment"), Is.True);
+				Assert.That(NHibernateUtil.IsInitialized(order.Payment), Is.False);
+				Assert.That(order.Payment is WireTransfer, Is.False);
+			}
+		}
+
+		[Test]
+		public void SetInitializedProxyShouldNotResetPropertyInitialization()
+		{
+			using (var s = OpenSession())
+			{
+				var order = s.Get<Order>(1);
+				var payment = s.Load<Payment>(2);
+				Assert.That(order.Payment is WireTransfer, Is.True); // Load property
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "Payment"), Is.True);
+				NHibernateUtil.Initialize(payment);
+				order.Payment = payment;
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "Payment"), Is.True);
 			}
 		}
 
@@ -128,13 +198,13 @@ namespace NHibernate.Test.GhostProperty
 				{
 					order = s.Get<Order>(1);
 					var logMessage = ls.GetWholeLog();
-					logMessage.Should().Not.Contain("FROM Payment");
+					Assert.That(logMessage, Does.Not.Contain("FROM Payment"));
 				}
-				order.Satisfy(o => !NHibernateUtil.IsPropertyInitialized(o, "Payment"));
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "Payment"), Is.False);
 
 				// trigger on-access lazy load 
 				var x = order.Payment;
-				order.Satisfy(o => NHibernateUtil.IsPropertyInitialized(o, "Payment"));
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "Payment"), Is.True);
 			}
 		}
 
@@ -148,20 +218,48 @@ namespace NHibernate.Test.GhostProperty
 				{
 					order = s.Get<Order>(1);
 					var logMessage = ls.GetWholeLog();
-					logMessage.Should().Not.Contain("ALazyProperty");
-					logMessage.Should().Contain("NoLazyProperty");
+					Assert.That(logMessage, Does.Not.Contain("ALazyProperty"));
+					Assert.That(logMessage, Does.Contain("NoLazyProperty"));
 				}
-				order.Satisfy(o => NHibernateUtil.IsPropertyInitialized(o, "NoLazyProperty"));
-				order.Satisfy(o => !NHibernateUtil.IsPropertyInitialized(o, "ALazyProperty"));
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "NoLazyProperty"), Is.True);
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "ALazyProperty"), Is.False);
 
 				using (var ls = new SqlLogSpy())
 				{
 					var x = order.ALazyProperty;
 					var logMessage = ls.GetWholeLog();
-					logMessage.Should().Contain("ALazyProperty");
+					Assert.That(logMessage, Does.Contain("ALazyProperty"));
 				}
-				order.Satisfy(o => NHibernateUtil.IsPropertyInitialized(o, "ALazyProperty"));
+				Assert.That(NHibernateUtil.IsPropertyInitialized(order, "ALazyProperty"), Is.True);
 			}
-		} 
+		}
+
+		[Test]
+		public void AcceptPropertySetWithTransientObject()
+		{
+			Order order;
+			using (var s = OpenSession())
+			{
+				order = s.Get<Order>(1);
+			}
+
+			var newPayment = new WireTransfer();
+			order.Payment = newPayment;
+
+			Assert.That(order.Payment, Is.EqualTo(newPayment));
+		}
+
+		[Test]
+		public void WillFetchJoinInSingleHqlQuery()
+		{
+			Order order = null;
+
+			using (ISession s = OpenSession())
+			{
+				order = s.CreateQuery("from Order o left join fetch o.Payment where o.Id = 1").List<Order>()[0];
+			}
+
+			Assert.DoesNotThrow(() => { var x = order.Payment; });
+		}
 	}
 }

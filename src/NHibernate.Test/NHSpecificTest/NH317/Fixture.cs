@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using NHibernate.Proxy;
+using NHibernate.Util;
 using NUnit.Framework;
 
 namespace NHibernate.Test.NHSpecificTest.NH317
@@ -19,7 +20,7 @@ namespace NHibernate.Test.NHSpecificTest.NH317
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] {"NHSpecificTest.NH317.Node.hbm.xml"}; }
 		}
@@ -31,7 +32,7 @@ namespace NHibernate.Test.NHSpecificTest.NH317
 			node.Id = 1;
 			node.Name = "Node 1";
 
-			ISession s = sessions.OpenSession();
+			ISession s = OpenSession();
 			s.Save(node);
 			s.Flush();
 			s.Close();
@@ -43,7 +44,12 @@ namespace NHibernate.Test.NHSpecificTest.NH317
 			s.Close();
 
 			// Serialize
-			IFormatter formatter = new BinaryFormatter();
+			var formatter = new BinaryFormatter
+			{
+#if !NETFX
+				SurrogateSelector = new SerializationHelper.SurrogateSelector()	
+#endif
+			};
 			MemoryStream ms = new MemoryStream();
 			formatter.Serialize(ms, nodeProxy);
 

@@ -1,3 +1,4 @@
+using System;
 using NHibernate.Persister.Entity;
 
 namespace NHibernate.Persister.Collection
@@ -80,5 +81,14 @@ namespace NHibernate.Persister.Collection
 		/// <param name="alias">The alias for the many-to-many target table</param>
 		/// <returns>Appropriate order-by fragment or empty string.</returns>
 		string GetManyToManyOrderByString(string alias);
+
+		// Obsolete since v5.2
+		/// <summary>
+		/// Generate the table alias to use for the collection's key columns
+		/// </summary>
+		/// <param name="alias">The alias for the target table</param>
+		/// <returns>Appropriate table alias.</returns>
+		[Obsolete("Use directly the alias parameter value instead")]
+		string GenerateTableAliasForKeyColumns(string alias);
 	}
 }

@@ -1,26 +1,20 @@
 using System.Linq;
 using NHibernate.Hql.Ast.ANTLR;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH2294
 {
-	public class Fixture : BugTestCase
+	[TestFixture]
+	public class Fixture : TestCase
 	{
-		protected override System.Collections.IList Mappings
-		{
-			get
-			{
-				return Enumerable.Empty<object>().ToList();
-			}
-		}
+		protected override string[] Mappings => System.Array.Empty<string>();
 
 		[Test, Ignore("External issue. The bug is inside RecognitionException of Antlr.")]
 		public void WhenQueryHasJustAWhereThenThrowQuerySyntaxException()
 		{
 			using (ISession session = OpenSession())
 			{
-				session.Executing(s => s.CreateQuery("where").List()).Throws<QuerySyntaxException>();
+				Assert.That(() => session.CreateQuery("where").List(), Throws.TypeOf<QuerySyntaxException>());
 			}
 		}
 	}

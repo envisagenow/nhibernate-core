@@ -14,7 +14,7 @@ namespace NHibernate.Test.ExpressionTest.Projection
             get { return "NHibernate.Test"; }
         }
 
-        protected override IList Mappings
+        protected override string[] Mappings
         {
             get
             {
@@ -39,7 +39,7 @@ namespace NHibernate.Test.ExpressionTest.Projection
 
         protected override void OnTearDown()
         {
-            using (ISession s = sessions.OpenSession())
+            using (ISession s = Sfi.OpenSession())
             {
                 s.Delete("from ProjectionTestClass");
                 s.Flush();

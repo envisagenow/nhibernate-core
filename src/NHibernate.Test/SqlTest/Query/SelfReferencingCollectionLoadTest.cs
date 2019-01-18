@@ -1,4 +1,5 @@
 using System.Collections;
+using NHibernate.Dialect;
 using NUnit.Framework;
 
 namespace NHibernate.Test.SqlTest.Query
@@ -6,7 +7,7 @@ namespace NHibernate.Test.SqlTest.Query
 	[TestFixture]
 	public class SelfReferencingCollectionLoadTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] {"SqlTest.Query.Item.hbm.xml"}; }
 		}
@@ -14,6 +15,13 @@ namespace NHibernate.Test.SqlTest.Query
 		protected override string MappingsAssembly
 		{
 			get { return "NHibernate.Test"; }
+		}
+
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			// Hacky mapping causing the primary key to reference itself as a foreign key, which is not supported by
+			// some databases. It fails when trying to insert data by considering the foreign key violated.
+			return !(Dialect is MySQLDialect || Dialect is SapSQLAnywhere17Dialect);
 		}
 
 		[Test]

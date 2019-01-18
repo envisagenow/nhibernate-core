@@ -4,6 +4,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using NHibernate.Dialect;
 using NHibernate.Type;
+using NHibernate.Util;
 using NUnit.Framework;
 
 namespace NHibernate.Test.TypesTest
@@ -37,7 +38,7 @@ namespace NHibernate.Test.TypesTest
 		}
 
 		/// <summary>
-		/// Certain drivers (ie - Oralce) don't handle writing and reading null byte[] 
+		/// Certain drivers (ie - Oracle) don't handle writing and reading null byte[] 
 		/// to and from the db consistently.  Verify if this driver does.
 		/// </summary>
 		[Test]
@@ -71,7 +72,7 @@ namespace NHibernate.Test.TypesTest
 		}
 
 		/// <summary>
-		/// Certain drivers (ie - Oralce) don't handle writing and reading byte[0] 
+		/// Certain drivers (ie - Oracle) don't handle writing and reading byte[0] 
 		/// to and from the db consistently.  Verify if this driver does.
 		/// </summary>
 		[Test]
@@ -84,8 +85,8 @@ namespace NHibernate.Test.TypesTest
 			BinaryClass bcBinary = new BinaryClass();
 			bcBinary.Id = 1;
 
-			bcBinary.DefaultSize = new byte[0];
-			bcBinary.WithSize = new byte[0];
+			bcBinary.DefaultSize = Array.Empty<byte>();
+			bcBinary.WithSize = Array.Empty<byte>();
 
 			ISession s = OpenSession();
 			ITransaction t = s.BeginTransaction();
@@ -110,7 +111,7 @@ namespace NHibernate.Test.TypesTest
 
 		/// <summary>
 		/// Test the setting of values in Parameters and the reading of the 
-		/// values out of the IDataReader.
+		/// values out of the DbDataReader.
 		/// </summary>
 		[Test]
 		public void ReadWrite()
@@ -150,12 +151,19 @@ namespace NHibernate.Test.TypesTest
 			return bcBinary;
 		}
 
-		private byte[] GetByteArray(int value)
+		private static byte[] GetByteArray(int value)
 		{
-			BinaryFormatter bf = new BinaryFormatter();
-			MemoryStream stream = new MemoryStream();
-			bf.Serialize(stream, value);
-			return stream.ToArray();
+			var bf = new BinaryFormatter
+			{
+#if !NETFX
+				SurrogateSelector = new SerializationHelper.SurrogateSelector()	
+#endif
+			};
+			using (var stream = new MemoryStream())
+			{
+				bf.Serialize(stream, value);
+				return stream.ToArray();
+			}
 		}
 	}
 }

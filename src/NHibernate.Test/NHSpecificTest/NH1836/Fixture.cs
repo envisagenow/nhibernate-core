@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
+using System.Linq;
+using NHibernate.Multi;
 using NHibernate.Transform;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH1836
 {
@@ -25,7 +27,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1836
 			}
 		}
 
-		[Test]
+		[Test, Obsolete]
 		public void AliasToBeanTransformerShouldApplyCorrectlyToMultiQuery()
 		{
 			using (var s = OpenSession())
@@ -37,9 +39,28 @@ namespace NHibernate.Test.NHSpecificTest.NH1836
 					);
 
 				IList results = null;
-				Executing.This(() => results = multiQuery.List()).Should().NotThrow();
+				Assert.That(() => results = multiQuery.List(), Throws.Nothing);
 				var elementOfFirstResult = ((IList)results[0])[0];
-				elementOfFirstResult.Should().Be.OfType<EntityDTO>().And.ValueOf.EntityId.Should().Be(1);
+				Assert.That(elementOfFirstResult, Is.TypeOf<EntityDTO>().And.Property("EntityId").EqualTo(1));
+			}
+		}
+
+		[Test]
+		public void AliasToBeanTransformerShouldApplyCorrectlyToQueryBatch()
+		{
+			using (var s = OpenSession())
+			using (var t = s.BeginTransaction())
+			{
+				var multiQuery = s
+				                 .CreateQueryBatch()
+				                 .Add<EntityDTO>(s
+				                                 .CreateQuery("select entity.Id as EntityId from Entity entity")
+				                                 .SetResultTransformer(Transformers.AliasToBean(typeof(EntityDTO))));
+
+				Assert.That(multiQuery.Execute, Throws.Nothing);
+				var results = multiQuery.GetResult<EntityDTO>(0);
+				Assert.That(results.First(), Is.TypeOf<EntityDTO>().And.Property("EntityId").EqualTo(1));
+				t.Commit();
 			}
 		}
 

@@ -1,10 +1,10 @@
 using System;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 {
+	[TestFixture]
 	public class NaturalIdTests
 	{
 		private class MyClass
@@ -39,17 +39,17 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 												nidm.Property(x => x.Name);
 												nidm.ManyToOne(x => x.Related);
 												nidm.Component(x => x.MyComponent, cmap =>
-												                                   {
+																				   {
 																														 cmap.Property(y => y.FirstName);
-												                                   });
+																				   });
 												nidm.Any(x => x.Any, typeof(int), anymap => { });
 											});
 			});
 
-			inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.Name)).Should().Be.True();
-			inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.Related)).Should().Be.True();
-			inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.MyComponent)).Should().Be.True();
-			inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.Any)).Should().Be.True();
+			Assert.That(inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.Name)), Is.True);
+			Assert.That(inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.Related)), Is.True);
+			Assert.That(inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.MyComponent)), Is.True);
+			Assert.That(inspector.IsMemberOfNaturalId(For<MyClass>.Property(x => x.Any)), Is.True);
 		}
 
 		[Test]
@@ -63,7 +63,7 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 			});
 			var hbmMapping = mapper.CompileMappingFor(new[] { typeof(MyClass) });
 			var hbmClass = hbmMapping.RootClasses[0];
-			hbmClass.naturalid.Should().Be.Null();
+			Assert.That(hbmClass.naturalid, Is.Null);
 		}
 	}
 }

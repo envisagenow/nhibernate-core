@@ -12,15 +12,16 @@ using NHibernate.Hql.Ast.ANTLR.Tree;
 using NHibernate.Param;
 using NHibernate.SqlCommand;
 using NHibernate.SqlTypes;
+using NHibernate.Util;
 using IQueryable = NHibernate.Persister.Entity.IQueryable;
 
 namespace NHibernate.Hql.Ast.ANTLR.Exec
 {
 	[CLSCompliant(false)]
-	public class BasicExecutor : AbstractStatementExecutor
+	public partial class BasicExecutor : AbstractStatementExecutor
 	{
 		private readonly IQueryable persister;
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(BasicExecutor));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(BasicExecutor));
 		private readonly SqlString sql;
 
 		public BasicExecutor(IStatement statement, IQueryable persister)
@@ -52,7 +53,7 @@ namespace NHibernate.Hql.Ast.ANTLR.Exec
 		{
 			CoordinateSharedCacheCleanup(session);
 
-			IDbCommand st = null;
+			DbCommand st = null;
 			RowSelection selection = parameters.RowSelection;
 
 			try
@@ -61,10 +62,11 @@ namespace NHibernate.Hql.Ast.ANTLR.Exec
 				{
 					CheckParametersExpectedType(parameters); // NH Different behavior (NH-1898)
 
-					var sqlQueryParametersList = sql.GetParameters().ToList();
+					var sqlString = FilterHelper.ExpandDynamicFilterParameters(sql, Parameters, session);
+					var sqlQueryParametersList = sqlString.GetParameters().ToList();
 					SqlType[] parameterTypes = Parameters.GetQueryParameterTypes(sqlQueryParametersList, session.Factory);
 
-					st = session.Batcher.PrepareCommand(CommandType.Text, sql, parameterTypes);
+					st = session.Batcher.PrepareCommand(CommandType.Text, sqlString, parameterTypes);
 					foreach (var parameterSpecification in Parameters)
 					{
 						parameterSpecification.Bind(st, sqlQueryParametersList, parameters, session);

@@ -1,15 +1,17 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using NHibernate.DomainModel;
 using NHibernate.DomainModel.NHSpecific;
 using NUnit.Framework;
+using NUnit.Framework.Constraints;
 
 namespace NHibernate.Test.NHSpecificTest
 {
 	[TestFixture]
 	public class OptimisticConcurrencyFixture : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] {"Multi.hbm.xml", "NHSpecific.Optimistic.hbm.xml"}; }
 		}
@@ -21,8 +23,7 @@ namespace NHibernate.Test.NHSpecificTest
 			using (ISession s = OpenSession())
 			{
 				Optimistic op = new Optimistic();
-				op.Bag = new ArrayList();
-				op.Bag.Add("xyz");
+				op.Bag = new List<string> {"xyz"};
 
 				s.Save(op);
 			}
@@ -55,7 +56,12 @@ namespace NHibernate.Test.NHSpecificTest
 					}
 
 					top.Name = "new name";
-					Assert.Throws<StaleObjectStateException>(() => session.Flush());
+
+					var expectedException = Sfi.Settings.IsBatchVersionedDataEnabled
+						? (IResolveConstraint) Throws.InstanceOf<StaleStateException>().And.Message.Contains("UPDATE rootclass")
+						: Throws.InstanceOf<StaleObjectStateException>();
+
+					Assert.That(() => session.Flush(), expectedException);
 				}
 			}
 			finally
@@ -89,7 +95,12 @@ namespace NHibernate.Test.NHSpecificTest
 					}
 
 					optimistic.String = "new string";
-					Assert.Throws<StaleObjectStateException>(() => session.Flush());
+
+					var expectedException = Sfi.Settings.IsBatchVersionedDataEnabled
+						? (IResolveConstraint) Throws.InstanceOf<StaleStateException>().And.Message.Contains("UPDATE Optimistic")
+						: Throws.InstanceOf<StaleObjectStateException>();
+
+					Assert.That(() => session.Flush(), expectedException);
 				}
 			}
 			finally

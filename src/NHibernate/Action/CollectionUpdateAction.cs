@@ -11,12 +11,12 @@ using NHibernate.Persister.Collection;
 namespace NHibernate.Action
 {
 	[Serializable]
-	public sealed class CollectionUpdateAction : CollectionAction
+	public sealed partial class CollectionUpdateAction : CollectionAction
 	{
 		private readonly bool emptySnapshot;
 
 		public CollectionUpdateAction(IPersistentCollection collection, ICollectionPersister persister, object key,
-		                              bool emptySnapshot, ISessionImplementor session)
+									  bool emptySnapshot, ISessionImplementor session)
 			: base(persister, collection, key, session)
 		{
 			this.emptySnapshot = emptySnapshot;
@@ -24,7 +24,7 @@ namespace NHibernate.Action
 
 		public override void Execute()
 		{
-			object id = Key;
+			object id = GetKey();
 			ISessionImplementor session = Session;
 			ICollectionPersister persister = Persister;
 			IPersistentCollection collection = Collection;
@@ -59,7 +59,7 @@ namespace NHibernate.Action
 				if (affectedByFilters)
 				{
 					throw new HibernateException("cannot recreate collection while filter is enabled: "
-					                             + MessageHelper.InfoString(persister, id, persister.Factory));
+												 + MessageHelper.CollectionInfoString(persister, collection, id, session));
 				}
 				if (!emptySnapshot)
 				{
@@ -74,7 +74,8 @@ namespace NHibernate.Action
 				persister.InsertRows(collection, id, session);
 			}
 
-			Session.PersistenceContext.GetCollectionEntry(collection).AfterAction(collection);
+			var entry = Session.PersistenceContext.GetCollectionEntry(collection);
+			entry.AfterAction(collection);
 
 			Evict();
 
@@ -113,46 +114,30 @@ namespace NHibernate.Action
 			}
 		}
 
-		public override BeforeTransactionCompletionProcessDelegate BeforeTransactionCompletionProcess
+		public override void ExecuteAfterTransactionCompletion(bool success)
 		{
-			get 
-			{ 
-				return null; 
-			}
-		}
+			// NH Different behavior: to support unlocking collections from the cache.(r3260)
 
-		public override AfterTransactionCompletionProcessDelegate AfterTransactionCompletionProcess
-		{
-			get
+			CacheKey ck = Session.GenerateCacheKey(GetKey(), Persister.KeyType, Persister.Role);
+
+			if (success)
 			{
-				return new AfterTransactionCompletionProcessDelegate((success) =>
+				// we can't disassemble a collection if it was uninitialized 
+				// or detached from the session
+				if (Collection.WasInitialized && Session.PersistenceContext.ContainsCollection(Collection))
 				{
-					// NH Different behavior: to support unlocking collections from the cache.(r3260)
-					if (Persister.HasCache)
-					{
-						CacheKey ck = Session.GenerateCacheKey(Key, Persister.KeyType, Persister.Role);
+					CollectionCacheEntry entry = CollectionCacheEntry.Create(Collection, Persister);
+					bool put = Persister.Cache.AfterUpdate(ck, entry, null, Lock);
 
-						if (success)
-						{
-							// we can't disassemble a collection if it was uninitialized 
-							// or detached from the session
-							if (Collection.WasInitialized && Session.PersistenceContext.ContainsCollection(Collection))
-							{
-								CollectionCacheEntry entry = new CollectionCacheEntry(Collection, Persister);
-								bool put = Persister.Cache.AfterUpdate(ck, entry, null, Lock);
-		
-								if (put && Session.Factory.Statistics.IsStatisticsEnabled)
-								{
-									Session.Factory.StatisticsImplementor.SecondLevelCachePut(Persister.Cache.RegionName);
-								}
-							}
-						}
-						else
-						{
-							Persister.Cache.Release(ck, Lock);
-						}
+					if (put && Session.Factory.Statistics.IsStatisticsEnabled)
+					{
+						Session.Factory.StatisticsImplementor.SecondLevelCachePut(Persister.Cache.RegionName);
 					}
-				});
+				}
+			}
+			else
+			{
+				Persister.Cache.Release(ck, Lock);
 			}
 		}
 	}

@@ -1,38 +1,53 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Xml;
+using System.Data.Common;
 using NHibernate.Engine;
 using NHibernate.SqlTypes;
 
 namespace NHibernate.Type
 {
 	[Serializable]
-	public class MetaType : AbstractType
+	public partial class MetaType : AbstractType
 	{
-		private readonly IDictionary<object, string> values;
-		private readonly IDictionary<string, object> keys;
-		private readonly IType baseType;
+		private readonly IDictionary<object, string> _values;
+		private readonly IDictionary<string, object> _keys;
+		private readonly IType _baseType;
+		private readonly ILiteralType _baseLiteralType;
 
 		public MetaType(IDictionary<object, string> values, IType baseType)
 		{
-			this.baseType = baseType;
-			this.values = values;
-			keys = new Dictionary<string, object>();
-			foreach (KeyValuePair<object, string> me in values)
+			_baseType = baseType ?? throw new ArgumentNullException(nameof(baseType));
+			_baseLiteralType = baseType as ILiteralType;
+			_values = values;
+
+			if (_values == null)
 			{
-				keys[me.Value] = me.Key;
+				if (baseType.ReturnedClass != typeof(string))
+					throw new ArgumentException(
+						$"Meta type base type {baseType} does not yield string but {baseType.ReturnedClass}, while no " +
+						"meta-value mapping has been provided",
+						nameof(baseType));
+				if (_baseLiteralType == null)
+					_baseLiteralType = NHibernateUtil.String;
+			}
+			else
+			{
+				_keys = new Dictionary<string, object>();
+				foreach (var me in values)
+				{
+					_keys[me.Value] = me.Key;
+				}
 			}
 		}
 
 		public override SqlType[] SqlTypes(IMapping mapping)
 		{
-			return baseType.SqlTypes(mapping);
+			return _baseType.SqlTypes(mapping);
 		}
 
 		public override int GetColumnSpan(IMapping mapping)
 		{
-			return baseType.GetColumnSpan(mapping);
+			return _baseType.GetColumnSpan(mapping);
 		}
 
 		public override System.Type ReturnedClass
@@ -40,39 +55,50 @@ namespace NHibernate.Type
 			get { return typeof (string); }
 		}
 
-		public override object NullSafeGet(IDataReader rs, string[] names, ISessionImplementor session, object owner)
+		public override object NullSafeGet(DbDataReader rs, string[] names, ISessionImplementor session, object owner)
 		{
-			object key = baseType.NullSafeGet(rs, names, session, owner);
-			return key == null ? null : values[key];
+			return GetValueForKey(_baseType.NullSafeGet(rs, names, session, owner));
 		}
 
-		public override object NullSafeGet(IDataReader rs,string name,ISessionImplementor session,object owner)
+		public override object NullSafeGet(DbDataReader rs, string name, ISessionImplementor session, object owner)
 		{
-			object key = baseType.NullSafeGet(rs, name, session, owner);
-			return key == null ? null : values[key];
+			return GetValueForKey(_baseType.NullSafeGet(rs, name, session, owner));
 		}
 
-		public override void NullSafeSet(IDbCommand st, object value, int index, bool[] settable, ISessionImplementor session)
+		private object GetValueForKey(object key)
+		{
+			// "_values?[key]" is valid code provided "_values[key]" can never yield null. It is the case because we
+			// use a dictionary interface which throws in case of missing key, and because a key associated to a null
+			// value would cause the building of the _keys dictionaries to fail.
+			return key == null ? null : _values?[key] ?? key;
+		}
+
+		public override void NullSafeSet(DbCommand st, object value, int index, bool[] settable, ISessionImplementor session)
 		{
 			if (settable[0]) NullSafeSet(st, value, index, session);
 		}
 
-		public override void NullSafeSet(IDbCommand st,object value,int index,ISessionImplementor session)
+		public override void NullSafeSet(DbCommand st, object value, int index, ISessionImplementor session)
 		{
-			baseType.NullSafeSet(st, value == null ? null : keys[(string)value], index, session);
+			// "_keys?[(string) value]" is valid code provided "_keys[(string) value]" can never yield null. It is the
+			// case because we use a dictionary interface which throws in case of missing key, and because it is not
+			// possible to have a value associated to a null key since generic dictionaries do not support null keys.
+			var key = value == null ? null : _keys?[(string) value] ?? value;
+
+			_baseType.NullSafeSet(st, key, index, session);
 		}
 
 		public override string ToLoggableString(object value, ISessionFactoryImplementor factory)
 		{
-			return ToXMLString(value, factory);
+			return (string)value;
 		}
 
 		public override string Name
 		{
-			get { return baseType.Name; } //TODO!
+			get { return _baseType.Name; } //TODO!
 		}
 
-		public override object DeepCopy(object value, EntityMode entityMode, ISessionFactoryImplementor factory)
+		public override object DeepCopy(object value, ISessionFactoryImplementor factory)
 		{
 			return value;
 		}
@@ -87,39 +113,25 @@ namespace NHibernate.Type
 			return checkable[0] && IsDirty(old, current, session);
 		}
 
-		public override object FromXMLNode(XmlNode xml, IMapping factory)
-		{
-			return FromXMLString(xml.Value, factory);
-		}
-
-		public object FromXMLString(string xml, IMapping factory)
-		{
-			return xml; //xml is the entity name
-		}
-
 		public override object Replace(object original, object current, ISessionImplementor session, object owner, System.Collections.IDictionary copiedAlready)
 		{
 			return original;
 		}
 
-		public override void SetToXMLNode(XmlNode node, object value, ISessionFactoryImplementor factory)
-		{
-			node.Value = ToXMLString(value, factory);
-		}
-
 		public override bool[] ToColumnNullness(object value, IMapping mapping)
 		{
-			throw new NotSupportedException();
+			return _baseType.ToColumnNullness(value, mapping);
 		}
 
-		public string ToXMLString(object value, ISessionFactoryImplementor factory)
+		internal string GetMetaValue(string className, Dialect.Dialect dialect)
 		{
-			return (string)value; //value is the entity name
-		}
+			var raw = _keys?[className] ?? className;
+			if (_baseLiteralType != null)
+			{
+				return _baseLiteralType.ObjectToSQLString(raw, dialect);
+			}
 
-		internal object GetMetaValue(string className)
-		{
-			return keys[className];
+			return raw?.ToString();
 		}
 	}
 }

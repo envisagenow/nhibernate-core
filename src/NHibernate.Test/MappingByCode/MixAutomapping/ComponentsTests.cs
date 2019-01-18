@@ -1,9 +1,9 @@
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MixAutomapping
 {
+	[TestFixture]
 	public class ComponentsTests
 	{
 		// a class without Poid is a Component
@@ -17,7 +17,10 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 		}
 		private class Entity
 		{
+			// Tested by reflection.
+#pragma warning disable CS0169 // The field 'ComponentsTests.Entity.id' is never used
 			private int id;
+#pragma warning restore CS0169 // The field 'ComponentsTests.Entity.id' is never used
 		}
 
 		private enum Something
@@ -33,7 +36,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			mapper.Component<AEntity>(map => { });
 
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsComponent(typeof(AEntity)).Should().Be.True();
+			Assert.That(inspector.IsComponent(typeof(AEntity)), Is.True);
 		}
 
 		[Test]
@@ -41,7 +44,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 		{
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsComponent(typeof(AComponent)).Should().Be.True();
+			Assert.That(inspector.IsComponent(typeof(AComponent)), Is.True);
 		}
 
 		[Test]
@@ -49,7 +52,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 		{
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsComponent(typeof(AEntity)).Should().Be.False();
+			Assert.That(inspector.IsComponent(typeof(AEntity)), Is.False);
 		}
 
 		[Test]
@@ -57,7 +60,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 		{
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsComponent(typeof(Entity)).Should().Be.False();
+			Assert.That(inspector.IsComponent(typeof(Entity)), Is.False);
 		}
 
 		[Test]
@@ -65,7 +68,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 		{
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsComponent(typeof(Something)).Should().Be.False();
+			Assert.That(inspector.IsComponent(typeof(Something)), Is.False);
 		}
 
 		[Test]
@@ -73,7 +76,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 		{
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsComponent(typeof(string)).Should().Be.False();
+			Assert.That(inspector.IsComponent(typeof(string)), Is.False);
 		}
 	}
 }

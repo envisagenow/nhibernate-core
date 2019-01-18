@@ -4,18 +4,13 @@ using NUnit.Framework;
 namespace NHibernate.Test.NHSpecificTest.NH1250
 {
 	/// <summary>
-	/// http://jira.nhibernate.org/browse/NH-1250
-	/// http://jira.nhibernate.org/browse/NH-1340
+	/// http://nhibernate.jira.com/browse/NH-1250
+	/// http://nhibernate.jira.com/browse/NH-1340
 	/// </summary>
 	/// <remarks>Failure occurs in MsSql2005Dialect only</remarks>
 	[TestFixture]
 	public class PolymorphicJoinFetchFixture : BugTestCase
 	{
-		public override string BugNumber
-		{
-			get { return "NH1250"; }
-		}
-
 		protected override bool AppliesTo(Dialect.Dialect dialect)
 		{
 			return dialect is MsSql2000Dialect;

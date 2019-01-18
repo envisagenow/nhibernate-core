@@ -4,17 +4,20 @@ using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode;
 using NHibernate.Mapping.ByCode.Impl;
 using NUnit.Framework;
-using SharpTestsEx;
 using System.Collections.Generic;
 
 namespace NHibernate.Test.MappingByCode.MappersTests.DynamicComponentMapperTests
 {
+	[TestFixture]
 	public class MapPropertyOnDynamicCompoTests
 	{
 		private class Person
 		{
 			public int Id { get; set; }
+			// Assigned by reflection
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 			private IDictionary info;
+#pragma warning restore CS0649 // Field is never assigned to, and will always have its default value
 			public IDictionary Info
 			{
 				get { return info; }
@@ -31,7 +34,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests.DynamicComponentMapperTests
 
 			mapper.Map(propertyInfo, x => { }, km => { }, rel => { });
 
-			component.Properties.Select(x => x.Name).Should().Have.SameSequenceAs("A");
+			Assert.That(component.Properties.Select(x => x.Name), Is.EquivalentTo(new[] { "A" }));
 		}
 
 		[Test]
@@ -45,7 +48,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests.DynamicComponentMapperTests
 			var called = false;
 			mapper.Map(propertyInfo, x => called = true, km => { }, rel => { });
 
-			called.Should().Be.True();
+			Assert.That(called, Is.True);
 		}
 
 		[Test]
@@ -58,7 +61,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests.DynamicComponentMapperTests
 
 			mapper.Map(propertyInfo, x => x.Access(Accessor.Field), km => { }, rel => { });
 
-			component.Properties.OfType<HbmMap>().Single().Access.Should().Be.NullOrEmpty();
+			Assert.That(component.Properties.OfType<HbmMap>().Single().Access, Is.Null.Or.Empty);
 		}		
 	}
 }

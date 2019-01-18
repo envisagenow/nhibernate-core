@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
-using System.Data;
+using System.Data.Common;
+using NHibernate.Collection.Generic;
 using NHibernate.Engine;
 using NHibernate.Loader;
 using NHibernate.Persister.Collection;
@@ -37,7 +39,7 @@ namespace NHibernate.Collection
 	/// time.
 	/// </para>
 	/// </summary>
-	public interface IPersistentCollection
+	public partial interface IPersistentCollection
 	{
 		/// <summary>
 		/// The owning entity.
@@ -94,19 +96,19 @@ namespace NHibernate.Collection
 		/// Clears out any Queued Additions.
 		/// </summary>
 		/// <remarks>
-		/// After a Flush() the database is in synch with the in-memory
-		/// contents of the Collection.  Since everything is in synch remove
+		/// After a Flush() the database is in sync with the in-memory
+		/// contents of the Collection.  Since everything is in sync remove
 		/// any Queued Additions.
 		/// </remarks>
 		void PostAction();
 
 		/// <summary>
-		/// Called just before reading any rows from the <see cref="IDataReader" />
+		/// Called just before reading any rows from the <see cref="DbDataReader" />
 		/// </summary>
 		void BeginRead();
 
 		/// <summary>
-		/// Called after reading all rows from the <see cref="IDataReader" />
+		/// Called after reading all rows from the <see cref="DbDataReader" />
 		/// </summary>
 		/// <remarks>
 		/// This should be overridden by sub collections that use temporary collections
@@ -173,17 +175,17 @@ namespace NHibernate.Collection
 		IEnumerable Entries(ICollectionPersister persister);
 
 		/// <summary>
-		/// Reads the row from the <see cref="IDataReader"/>.
+		/// Reads the row from the <see cref="DbDataReader"/>.
 		/// </summary>
 		/// <remarks>
 		/// This method should be prepared to handle duplicate elements caused by fetching multiple collections.
 		/// </remarks>
-		/// <param name="reader">The IDataReader that contains the value of the Identifier</param>
+		/// <param name="reader">The DbDataReader that contains the value of the Identifier</param>
 		/// <param name="role">The persister for this Collection.</param>
 		/// <param name="descriptor">The descriptor providing result set column names</param>
 		/// <param name="owner">The owner of this Collection.</param>
 		/// <returns>The object that was contained in the row.</returns>
-		object ReadFrom(IDataReader reader, ICollectionPersister role, ICollectionAliases descriptor, object owner);
+		object ReadFrom(DbDataReader reader, ICollectionPersister role, ICollectionAliases descriptor, object owner);
 
 		/// <summary>
 		/// Get the identifier of the given collection entry
@@ -241,7 +243,7 @@ namespace NHibernate.Collection
 		/// <param name="persister">The <see cref="ICollectionPersister"/> for this Collection.</param>
 		/// <returns>
 		/// <see langword="false" /> by default since most collections can determine which rows need to be
-		/// individually updated/inserted/deleted.  Currently only <see cref="PersistentBag"/>'s for <c>many-to-many</c>
+		/// individually updated/inserted/deleted.  Currently only <see cref="PersistentGenericBag{T}"/>'s for <c>many-to-many</c>
 		/// need to be recreated.
 		/// </returns>
 		bool NeedsRecreate(ICollectionPersister persister);
@@ -335,5 +337,41 @@ namespace NHibernate.Collection
 		/// that have been orphaned.
 		/// </returns>
 		ICollection GetOrphans(object snapshot, string entityName);
+	}
+
+	// 6.0 TODO: merge into IPersistentCollection
+	public static class PersistentCollectionExtensions
+	{
+		private static readonly INHibernateLogger Logger = NHibernateLogger.For(typeof(PersistentCollectionExtensions));
+
+		/// <summary>
+		/// After reading all existing elements from the database, do the queued operations
+		/// (adds or removes) on the underlying collection.
+		/// </summary>
+		/// <param name="collection">The collection.</param>
+		public static void ApplyQueuedOperations(this IPersistentCollection collection)
+		{
+			if (collection is AbstractPersistentCollection baseImpl)
+			{
+				baseImpl.ApplyQueuedOperations();
+				return;
+			}
+
+			// Fallback on reflection for custom implementations
+			var collectionType = collection.GetType();
+			var applyQueuedOperationsMethod = collectionType.GetMethod(
+				nameof(AbstractPersistentCollection.ApplyQueuedOperations),
+				Array.Empty<System.Type>());
+			if (applyQueuedOperationsMethod != null)
+			{
+				applyQueuedOperationsMethod.Invoke(collection, Array.Empty<object>());
+				return;
+			}
+
+			Logger.Warn(
+				"{0} does not implement 'void ApplyQueuedOperations()'. It should move any queued operations" +
+				"processing out of 'AfterInitialize' and put it in a 'public void ApplyQueuedOperations()'.",
+				collectionType);
+		}
 	}
 }

@@ -1,5 +1,6 @@
 using System;
 using NHibernate.Properties;
+using NHibernate.Util;
 
 namespace NHibernate.Tuple.Component
 {
@@ -9,32 +10,23 @@ namespace NHibernate.Tuple.Component
 	[Serializable]
 	public class DynamicMapComponentTuplizer : AbstractComponentTuplizer
 	{
-		public DynamicMapComponentTuplizer(Mapping.Component component) : base(component) { }
-
-		public override System.Type MappedClass
+		public DynamicMapComponentTuplizer(Mapping.Component component)
+			: base(component)
 		{
-			get { return typeof(System.Collections.IDictionary); }
+			// Fix for NH-3119
+			instantiator = BuildInstantiator(component);
 		}
 
-		protected internal override IInstantiator BuildInstantiator(Mapping.Component component)
-		{
-			return new DynamicMapInstantiator();
-		}
+		public override System.Type MappedClass =>
+			typeof(DynamicComponent);
 
-		protected internal override IGetter BuildGetter(Mapping.Component component, Mapping.Property prop)
-		{
-			return BuildPropertyAccessor(prop).GetGetter(null, prop.Name);
-		}
+		protected internal override IInstantiator BuildInstantiator(Mapping.Component component) =>
+			new DynamicComponentInstantiator();
 
-		protected internal override ISetter BuildSetter(Mapping.Component component, Mapping.Property prop)
-		{
-			return BuildPropertyAccessor(prop).GetSetter(null, prop.Name);
-		}
+		protected internal override IGetter BuildGetter(Mapping.Component component, Mapping.Property prop) =>
+			PropertyAccessorFactory.DynamicMapPropertyAccessor.GetGetter(null, prop.Name);
 
-		private IPropertyAccessor BuildPropertyAccessor(Mapping.Property property)
-		{
-			return PropertyAccessorFactory.DynamicMapPropertyAccessor;
-		}
-
+		protected internal override ISetter BuildSetter(Mapping.Component component, Mapping.Property prop) =>
+			PropertyAccessorFactory.DynamicMapPropertyAccessor.GetSetter(null, prop.Name);
 	}
 }

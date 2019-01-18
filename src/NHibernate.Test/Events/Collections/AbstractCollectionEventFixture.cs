@@ -2,14 +2,19 @@ using System.Collections;
 using System.Collections.Generic;
 using NHibernate.Collection;
 using NHibernate.Collection.Generic;
-using NHibernate.Event;
 using NHibernate.Test.Events.Collections.Association.Bidirectional.ManyToMany;
 using NUnit.Framework;
 
 namespace NHibernate.Test.Events.Collections
 {
+	[TestFixture]
 	public abstract class AbstractCollectionEventFixture : TestCase
 	{
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			return TestDialect.SupportsEmptyInsertsOrHasNonIdentityNativeGenerator;
+		}
+
 		protected override string MappingsAssembly
 		{
 			get { return "NHibernate.Test"; }
@@ -50,7 +55,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void SaveParentEmptyChildren()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNoChildren("parent");
 			Assert.That(parent.Children.Count, Is.EqualTo(0));
 			int index = 0;
@@ -73,7 +78,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public virtual void SaveParentOneChild()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			int index = 0;
 			CheckResult(listeners, listeners.PreCollectionRecreate, parent, index++);
@@ -91,7 +96,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentNullToOneChild()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNullChildren("parent");
 			listeners.Clear();
 			Assert.That(parent.Children, Is.Null);
@@ -121,7 +126,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentNoneToOneChild()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNoChildren("parent");
 			listeners.Clear();
 			Assert.That(parent.Children.Count, Is.EqualTo(0));
@@ -150,7 +155,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentOneToTwoChildren()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			Assert.That(parent.Children.Count, Is.EqualTo(1));
 			listeners.Clear();
@@ -179,7 +184,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public virtual void UpdateParentOneToTwoSameChildren()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IChild child = GetFirstChild(parent.Children);
 			Assert.That(parent.Children.Count, Is.EqualTo(1));
@@ -227,7 +232,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentNullToOneChildDiffCollection()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNullChildren("parent");
 			listeners.Clear();
 			Assert.That(parent.Children, Is.Null);
@@ -259,7 +264,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentNoneToOneChildDiffCollection()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNoChildren("parent");
 			listeners.Clear();
 			Assert.That(parent.Children.Count, Is.EqualTo(0));
@@ -292,7 +297,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentOneChildDiffCollectionSameChild()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IChild child = GetFirstChild(parent.Children);
 			listeners.Clear();
@@ -341,7 +346,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentOneChildDiffCollectionDiffChild()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IChild oldChild = GetFirstChild(parent.Children);
 			listeners.Clear();
@@ -389,7 +394,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentOneChildToNoneByRemove()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			Assert.That(parent.Children.Count, Is.EqualTo(1));
 			IChild child = GetFirstChild(parent.Children);
@@ -432,7 +437,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentOneChildToNoneByClear()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			Assert.That(parent.Children.Count, Is.EqualTo(1));
 			IChild child = GetFirstChild(parent.Children);
@@ -474,7 +479,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void UpdateParentTwoChildrenToOne()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			Assert.That(parent.Children.Count, Is.EqualTo(1));
 			IChild oldChild = GetFirstChild(parent.Children);
@@ -525,7 +530,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void DeleteParentWithNullChildren()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNullChildren("parent");
 			listeners.Clear();
 			ISession s = OpenSession();
@@ -544,7 +549,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void DeleteParentWithNoChildren()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithNoChildren("parent");
 			listeners.Clear();
 			ISession s = OpenSession();
@@ -564,7 +569,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void DeleteParentAndChild()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IChild child = GetFirstChild(parent.Children);
 			listeners.Clear();
@@ -604,7 +609,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void MoveChildToDifferentParent()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IParentWithCollection otherParent = CreateParentWithOneChild("otherParent", "otherChild");
 			IChild child = GetFirstChild(parent.Children);
@@ -651,7 +656,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void MoveAllChildrenToDifferentParent()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IParentWithCollection otherParent = CreateParentWithOneChild("otherParent", "otherChild");
 			IChild child = GetFirstChild(parent.Children);
@@ -698,7 +703,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void MoveCollectionToDifferentParent()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IParentWithCollection otherParent = CreateParentWithOneChild("otherParent", "otherChild");
 			listeners.Clear();
@@ -749,7 +754,7 @@ namespace NHibernate.Test.Events.Collections
 		[Test]
 		public void MoveCollectionToDifferentParentFlushMoveToDifferentParent()
 		{
-			CollectionListeners listeners = new CollectionListeners(sessions);
+			CollectionListeners listeners = new CollectionListeners(Sfi);
 			IParentWithCollection parent = CreateParentWithOneChild("parent", "child");
 			IParentWithCollection otherParent = CreateParentWithOneChild("otherParent", "otherChild");
 			IParentWithCollection otherOtherParent = CreateParentWithNoChildren("otherParent");
@@ -886,11 +891,11 @@ namespace NHibernate.Test.Events.Collections
 		                           IEntity ownerExpected, object collExpected, int index)
 		{
 			Assert.That(listeners.ListenersCalled[index], Is.SameAs(listenerExpected));
-			Assert.That(((AbstractCollectionEvent) listeners.Events[index]).AffectedOwnerOrNull, Is.SameAs(ownerExpected));
-			Assert.That(((AbstractCollectionEvent) listeners.Events[index]).AffectedOwnerIdOrNull, Is.EqualTo(ownerExpected.Id));
-			Assert.That(((AbstractCollectionEvent) listeners.Events[index]).GetAffectedOwnerEntityName(),
+			Assert.That(listeners.Events[index].AffectedOwnerOrNull, Is.SameAs(ownerExpected));
+			Assert.That(listeners.Events[index].AffectedOwnerIdOrNull, Is.EqualTo(ownerExpected.Id));
+			Assert.That(listeners.Events[index].GetAffectedOwnerEntityName(),
 			            Is.EqualTo(ownerExpected.GetType().FullName));
-			Assert.That(((AbstractCollectionEvent) listeners.Events[index]).Collection, Is.SameAs(collExpected));
+			Assert.That(listeners.Events[index].Collection, Is.SameAs(collExpected));
 		}
 
 		protected void CheckNumberOfResults(CollectionListeners listeners, int nEventsExpected)

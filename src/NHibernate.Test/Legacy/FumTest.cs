@@ -6,6 +6,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using NHibernate.DomainModel;
 using NHibernate.Criterion;
 using NHibernate.Type;
+using NHibernate.Util;
 using NUnit.Framework;
 
 namespace NHibernate.Test.Legacy
@@ -18,7 +19,7 @@ namespace NHibernate.Test.Legacy
 	{
 		protected static short fumKeyShort = 1;
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get
 			{
@@ -75,7 +76,7 @@ namespace NHibernate.Test.Legacy
 				Assert.IsTrue(b.MapComponent.Stringmap.Count == 2);
 
 				int none = s.CreateCriteria(typeof(Fum))
-					.Add(Expression.In("FumString", new string[0]))
+					.Add(Expression.In("FumString", Array.Empty<string>()))
 					.List().Count;
 				Assert.AreEqual(0, none);
 
@@ -133,7 +134,7 @@ namespace NHibernate.Test.Legacy
 				baseCriteria = s.CreateCriteria(typeof(Fum))
 					.Add(Expression.Like("FumString", "f%"))
 					.SetResultTransformer(CriteriaSpecification.AliasToEntityMap)
-					.SetFetchMode("Friends", FetchMode.Eager);
+					.Fetch("Friends");
 				baseCriteria.CreateCriteria("Fo", "fo")
 					.Add(Expression.Eq("FumString", fum.Fo.FumString));
 				map = (IDictionary) baseCriteria.List()[0];
@@ -438,10 +439,8 @@ namespace NHibernate.Test.Legacy
 			s.Save(fum2);
 			Qux q = new Qux();
 			s.Save(q);
-			IList list = new ArrayList();
-			list.Add(fum1);
 			q.Fums = new HashSet<Fum> {fum1, fum2};
-			q.MoreFums = list;
+			q.MoreFums = new List<Fum> {fum1};
 			fum1.QuxArray = new Qux[] {q};
 			s.Flush();
 			s.Close();
@@ -469,13 +468,10 @@ namespace NHibernate.Test.Legacy
 			s.Save(q);
 			Fum f1 = new Fum(FumKey("f1"));
 			Fum f2 = new Fum(FumKey("f2"));
-			IList list = new ArrayList();
-			list.Add(f1);
-			list.Add(f2);
 			f1.FumString = "f1";
 			f2.FumString = "f2";
 			q.Fums = new HashSet<Fum> {f1, f2};
-			q.MoreFums = list;
+			q.MoreFums = new List<Fum> {f1, f2};
 			s.Save(f1);
 			s.Save(f2);
 			s.Flush();
@@ -491,7 +487,7 @@ namespace NHibernate.Test.Legacy
 
 			s = OpenSession();
 			t = s.BeginTransaction();
-			list = s.CreateQuery("from fum in class NHibernate.DomainModel.Fum where not fum.FumString='FRIEND'").List();
+			var list = s.CreateQuery("from fum in class NHibernate.DomainModel.Fum where not fum.FumString='FRIEND'").List();
 			Assert.AreEqual(2, list.Count, "deleted owner");
 			s.Lock(list[0], LockMode.Upgrade);
 			s.Lock(list[1], LockMode.Upgrade);
@@ -603,7 +599,8 @@ namespace NHibernate.Test.Legacy
 				if (Dialect.SupportsSubSelects)
 				{
 					s.CreateQuery("from fum1 in class Fum where exists elements(fum1.Friends)").List();
-					s.CreateQuery("from fum1 in class Fum where size(fum1.Friends) = 0").List();
+					if (Dialect.SupportsScalarSubSelects)
+						s.CreateQuery("from fum1 in class Fum where size(fum1.Friends) = 0").List();
 				}
 				s.CreateQuery("select elements(fum1.Friends) from fum1 in class Fum").List();
 				s.CreateQuery("from fum1 in class Fum, fr in elements( fum1.Friends )").List();
@@ -620,9 +617,9 @@ namespace NHibernate.Test.Legacy
 
 			// NOTE: H2.1 has getSessions().openSession() here (and below),
 			// instead of just the usual openSession()
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
-				s.FlushMode = FlushMode.Never;
+				s.FlushMode = FlushMode.Manual;
 
 				Simple simple = new Simple();
 				simple.Address = "123 Main St. Anytown USA";
@@ -659,9 +656,9 @@ namespace NHibernate.Test.Legacy
 			///////////////////////////////////////////////////////////////////////////
 			// Test updates across serializations
 
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
-				s.FlushMode = FlushMode.Never;
+				s.FlushMode = FlushMode.Manual;
 				Simple simple = (Simple) s.Get(typeof(Simple), 10L);
 				Assert.AreEqual(check.Name, simple.Name, "Not same parent instances");
 				Assert.AreEqual(check.Other.Name, other.Name, "Not same child instances");
@@ -682,9 +679,9 @@ namespace NHibernate.Test.Legacy
 
 			///////////////////////////////////////////////////////////////////////////
 			// Test deletions across serializations
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
-				s.FlushMode = FlushMode.Never;
+				s.FlushMode = FlushMode.Manual;
 				Simple simple = (Simple) s.Get(typeof(Simple), 10L);
 				Assert.AreEqual(check.Name, simple.Name, "Not same parent instances");
 				Assert.AreEqual(check.Other.Name, other.Name, "Not same child instances");
@@ -711,7 +708,12 @@ namespace NHibernate.Test.Legacy
 
 		private ISession SpoofSerialization(ISession session)
 		{
-			BinaryFormatter formatter = new BinaryFormatter();
+			var formatter = new BinaryFormatter
+			{
+#if !NETFX
+				SurrogateSelector = new SerializationHelper.SurrogateSelector()	
+#endif
+			};
 			MemoryStream stream = new MemoryStream();
 			formatter.Serialize(stream, session);
 

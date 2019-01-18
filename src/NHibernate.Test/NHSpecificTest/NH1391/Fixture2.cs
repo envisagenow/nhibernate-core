@@ -5,27 +5,29 @@ namespace NHibernate.Test.NHSpecificTest.NH1391
 	[TestFixture]
 	public class Fixture2:BugTestCase
 	{
+		object _personId;
+
 		protected override void OnSetUp()
 		{
 			using (var session = OpenSession())
 			using (var tran = session.BeginTransaction())
 			{
-				PersonWithAllTypes personWithAllTypes = new PersonWithAllTypes();
-				Animal animal = new Animal { Name = "Pasha", Owner = personWithAllTypes };
-				Dog dog = new Dog { Country = "Turkey", Name = "Kral", Owner = personWithAllTypes };
-				SivasKangal sivasKangal = new SivasKangal
-				                          	{
-				                          		Name = "Karabas",
-				                          		Country = "Turkey",
-				                          		HouseAddress = "Address",
-				                          		Owner = personWithAllTypes
-				                          	};
-				Cat cat = new Cat { Name = "Tekir", EyeColor = "Red", Owner = personWithAllTypes };
+				var personWithAllTypes = new PersonWithAllTypes();
+				var animal = new Animal { Name = "Pasha", Owner = personWithAllTypes };
+				var dog = new Dog { Country = "Turkey", Name = "Kral", Owner = personWithAllTypes };
+				var sivasKangal = new SivasKangal
+				{
+					Name = "Karabas",
+					Country = "Turkey",
+					HouseAddress = "Address",
+					Owner = personWithAllTypes
+				};
+				var cat = new Cat { Name = "Tekir", EyeColor = "Red", Owner = personWithAllTypes };
 				personWithAllTypes.AnimalsGeneric.Add(animal);
 				personWithAllTypes.AnimalsGeneric.Add(cat);
 				personWithAllTypes.AnimalsGeneric.Add(dog);
 				personWithAllTypes.AnimalsGeneric.Add(sivasKangal);
-				session.Save(personWithAllTypes);
+				_personId = session.Save(personWithAllTypes);
 				tran.Commit();
 			}
 		}
@@ -47,14 +49,10 @@ namespace NHibernate.Test.NHSpecificTest.NH1391
 			using (var session = OpenSession())
 			using (var tran = session.BeginTransaction())
 			{
-				var personWithAnimals = session.Get<PersonWithAllTypes>(1);
-				Assert.That(personWithAnimals.AnimalsNonGeneric, Has.Count.EqualTo(4));
+				var personWithAnimals = session.Get<PersonWithAllTypes>(_personId);
 				Assert.That(personWithAnimals.AnimalsGeneric, Has.Count.EqualTo(4));
-				Assert.That(personWithAnimals.CatsNonGeneric, Has.Count.EqualTo(1));
 				Assert.That(personWithAnimals.CatsGeneric,Has.Count.EqualTo(1));
-				Assert.That(personWithAnimals.DogsNonGeneric, Has.Count.EqualTo(2));
 				Assert.That(personWithAnimals.DogsGeneric,Has.Count.EqualTo(2));
-				Assert.That(personWithAnimals.SivasKangalsNonGeneric, Has.Count.EqualTo(1));
 				Assert.That(personWithAnimals.SivasKangalsGeneric, Has.Count.EqualTo(1));
 			}
 		}

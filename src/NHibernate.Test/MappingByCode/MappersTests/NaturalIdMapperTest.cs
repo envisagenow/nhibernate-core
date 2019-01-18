@@ -1,10 +1,10 @@
 using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode.Impl;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MappersTests
 {
+	[TestFixture]
 	public class NaturalIdMapperTest
 	{
 		private class EntitySimpleWithNaturalId
@@ -23,7 +23,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			var hbmNaturalId = hbmClass.naturalid;
 			nid.Mutable(true);
-			hbmNaturalId.mutable.Should().Be.True();
+			Assert.That(hbmNaturalId.mutable, Is.True);
 		}
 	}
 }

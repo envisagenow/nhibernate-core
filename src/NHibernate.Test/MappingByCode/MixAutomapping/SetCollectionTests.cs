@@ -2,16 +2,19 @@ using System.Collections.Generic;
 using System.Reflection;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MixAutomapping
 {
+	[TestFixture]
 	public class SetCollectionTests
 	{
 		private class EntityWithSets
 		{
+			// Assigned by reflection
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 			private ICollection<string> others;
 			private ISet<string> emails;
+#pragma warning restore CS0649 // Field is never assigned to, and will always have its default value
 			public ISet<string> NickNames { get; set; }
 
 			public ICollection<string> Emails
@@ -32,7 +35,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsSet(mi).Should().Be.True();
+			Assert.That(inspector.IsSet(mi), Is.True);
 		}
 
 		[Test]
@@ -42,7 +45,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsSet(mi).Should().Be.True();
+			Assert.That(inspector.IsSet(mi), Is.True);
 		}
 
 		[Test]
@@ -52,7 +55,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsSet(mi).Should().Be.True();
+			Assert.That(inspector.IsSet(mi), Is.True);
 		}
 
 		[Test]
@@ -62,7 +65,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsSet(mi).Should().Be.False();
+			Assert.That(inspector.IsSet(mi), Is.False);
 		}
 
 		[Test]
@@ -72,7 +75,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsSet(mi).Should().Be.False();
+			Assert.That(inspector.IsSet(mi), Is.False);
 		}
 
 		[Test]
@@ -84,7 +87,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			mapper.Class<EntityWithSets>(map => map.Set(x => x.Others, x => { }, y=> {}));
 
 			var inspector = (IModelInspector)autoinspector;
-			inspector.IsSet(mi).Should().Be.True();
+			Assert.That(inspector.IsSet(mi), Is.True);
 		}
 	}
 }

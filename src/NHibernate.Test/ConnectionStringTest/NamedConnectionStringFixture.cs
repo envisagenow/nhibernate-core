@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Data.Common;
 using NHibernate.Connection;
 using NUnit.Framework;
 using Environment=NHibernate.Cfg.Environment;
@@ -35,6 +35,8 @@ namespace NHibernate.Test.ConnectionStringTest
 		[Test]
 		public void CanGetNamedConnectionStringFromConfiguration()
 		{
+			Assume.That(TestsContext.ExecutingWithVsTest, Is.False);
+
 			Dictionary<string, string> settings = new Dictionary<string, string>();
 			settings.Add(Environment.ConnectionStringName, "DummyConnectionString");
 			MockConnectionProvider cp = new MockConnectionProvider();
@@ -44,7 +46,7 @@ namespace NHibernate.Test.ConnectionStringTest
 		}
 	}
 	
-	public class MockConnectionProvider : ConnectionProvider
+	public partial class MockConnectionProvider : ConnectionProvider
 	{
 		
 		public string PublicConnectionString
@@ -56,10 +58,10 @@ namespace NHibernate.Test.ConnectionStringTest
 		}
 		
 		/// <summary>
-		/// Get an open <see cref="IDbConnection"/>.
+		/// Get an open <see cref="DbConnection"/>.
 		/// </summary>
-		/// <returns>An open <see cref="IDbConnection"/>.</returns>
-		public override IDbConnection GetConnection()
+		/// <returns>An open <see cref="DbConnection"/>.</returns>
+		public override DbConnection GetConnection()
 		{
 			throw new NotImplementedException();
 		}

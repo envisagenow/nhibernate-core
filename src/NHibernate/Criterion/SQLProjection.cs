@@ -5,7 +5,6 @@ using NHibernate.Util;
 
 namespace NHibernate.Criterion
 {
-	using System.Collections.Generic;
 	using Engine;
 
 	/// <summary>
@@ -36,17 +35,17 @@ namespace NHibernate.Criterion
 			this.groupBy = groupBy;
 		}
 
-		public SqlString ToSqlString(ICriteria criteria, int loc, ICriteriaQuery criteriaQuery, IDictionary<string, IFilter> enabledFilters)
+		public SqlString ToSqlString(ICriteria criteria, int loc, ICriteriaQuery criteriaQuery)
 		{
 			//SqlString result = new SqlString(criteriaQuery.GetSQLAlias(criteria));
 			//result.Replace(sql, "{alias}");
 			//return result;
-			return new SqlString(StringHelper.Replace(sql, "{alias}", criteriaQuery.GetSQLAlias(criteria)));
+			return new SqlString(sql?.Replace("{alias}", criteriaQuery.GetSQLAlias(criteria)));
 		}
 
-		public SqlString ToGroupSqlString(ICriteria criteria, ICriteriaQuery criteriaQuery, IDictionary<string, IFilter> enabledFilters)
+		public SqlString ToGroupSqlString(ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return new SqlString(StringHelper.Replace(groupBy, "{alias}", criteriaQuery.GetSQLAlias(criteria)));
+			return new SqlString(groupBy?.Replace("{alias}", criteriaQuery.GetSQLAlias(criteria)));
 		}
 
 		public override string ToString()
@@ -62,11 +61,6 @@ namespace NHibernate.Criterion
 		public string[] Aliases
 		{
 			get { return aliases; }
-		}
-
-		public string[] GetColumnAliases(int loc)
-		{
-			return columnAliases;
 		}
 
 		public bool IsGrouped
@@ -87,7 +81,7 @@ namespace NHibernate.Criterion
 		/// <returns></returns>
 		public TypedValue[] GetTypedValues(ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return new TypedValue[0];
+			return Array.Empty<TypedValue>();
 		}
 
 		public IType[] GetTypes(string alias, ICriteria crit, ICriteriaQuery criteriaQuery)
@@ -95,7 +89,22 @@ namespace NHibernate.Criterion
 			return null; //unsupported
 		}
 
+		public string[] GetColumnAliases(int loc)
+		{
+			return columnAliases;
+		}
+
 		public string[] GetColumnAliases(String alias, int loc)
+		{
+			return null; //unsupported
+		}
+
+		public string[] GetColumnAliases(int position, ICriteria criteria, ICriteriaQuery criteriaQuery)
+		{
+			return columnAliases;
+		}
+
+		public string[] GetColumnAliases(string alias, int position, ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
 			return null; //unsupported
 		}

@@ -26,9 +26,9 @@ namespace NHibernate.Event.Default
 	/// A convenience bas class for listeners responding to save events. 
 	/// </summary>
 	[Serializable]
-	public abstract class AbstractSaveEventListener : AbstractReassociateEventListener
+	public abstract partial class AbstractSaveEventListener : AbstractReassociateEventListener
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(AbstractSaveEventListener));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(AbstractSaveEventListener));
 
 		protected virtual bool? AssumedUnsaved
 		{
@@ -51,7 +51,7 @@ namespace NHibernate.Event.Default
 		{
 			// Sub-insertions should occur before containing insertion so
 			// Try to do the callback now
-			if (persister.ImplementsLifecycle(source.EntityMode))
+			if (persister.ImplementsLifecycle)
 			{
 				log.Debug("calling OnSave()");
 				if (((ILifecycle)entity).OnSave(source) == LifecycleVeto.Veto)
@@ -65,7 +65,7 @@ namespace NHibernate.Event.Default
 
 		protected virtual void Validate(object entity, IEntityPersister persister, IEventSource source)
 		{
-			if (persister.ImplementsValidatable(source.EntityMode))
+			if (persister.ImplementsValidatable)
 			{
 				((IValidatable)entity).Validate();
 			}
@@ -120,11 +120,11 @@ namespace NHibernate.Event.Default
 			}
 			else
 			{
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug(string.Format("generated identifier: {0}, using strategy: {1}",
-						persister.IdentifierType.ToLoggableString(generatedId, source.Factory),
-						persister.IdentifierGenerator.GetType().FullName));
+					log.Debug("generated identifier: {0}, using strategy: {1}", 
+						persister.IdentifierType.ToLoggableString(generatedId, source.Factory), 
+						persister.IdentifierGenerator.GetType().FullName);
 				}
 				return PerformSave(entity, generatedId, persister, false, anything, source, true);
 			}
@@ -152,9 +152,9 @@ namespace NHibernate.Event.Default
 		/// </returns>
 		protected virtual object PerformSave(object entity, object id, IEntityPersister persister, bool useIdentityColumn, object anything, IEventSource source, bool requiresImmediateIdAccess)
 		{
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
-				log.Debug("saving " + MessageHelper.InfoString(persister, id, source.Factory));
+				log.Debug("saving {0}", MessageHelper.InfoString(persister, id, source.Factory));
 			}
 
 			EntityKey key;
@@ -173,7 +173,7 @@ namespace NHibernate.Event.Default
 						throw new NonUniqueObjectException(id, persister.EntityName);
 					}
 				}
-				persister.SetIdentifier(entity, id, source.EntityMode);
+				persister.SetIdentifier(entity, id);
 			}
 			else
 			{
@@ -211,10 +211,7 @@ namespace NHibernate.Event.Default
 
 			object id = key == null ? null : key.Identifier;
 
-			// NH Different behavior (shouldDelayIdentityInserts=false anyway)
-			//bool inTxn = source.ConnectionManager.IsInActiveTransaction;
-			//bool shouldDelayIdentityInserts = !inTxn && !requiresImmediateIdAccess;
-			bool shouldDelayIdentityInserts = false;
+			bool shouldDelayIdentityInserts = !requiresImmediateIdAccess;
 
 			// Put a placeholder in entries, so we don't recurse back and try to save() the
 			// same object again. QUESTION: should this be done before onSave() is called?
@@ -242,7 +239,7 @@ namespace NHibernate.Event.Default
 
 			if (substitute)
 			{
-				persister.SetPropertyValues(entity, values, source.EntityMode);
+				persister.SetPropertyValues(entity, values);
 			}
 
 			TypeHelper.DeepCopy(values, types, persister.PropertyUpdateability, values, source);
@@ -299,10 +296,11 @@ namespace NHibernate.Event.Default
 
 		private void MarkInterceptorDirty(object entity, IEntityPersister persister, IEventSource source)
 		{
-			if (FieldInterceptionHelper.IsInstrumented(entity))
+			if (persister.IsInstrumented)
 			{
-				IFieldInterceptor interceptor = FieldInterceptionHelper.InjectFieldInterceptor(entity, persister.EntityName, persister.GetMappedClass(source.EntityMode), null, null, source);
-				interceptor.MarkDirty();
+				var interceptor = persister.EntityMetamodel.BytecodeEnhancementMetadata
+				                           .InjectInterceptor(entity, false, source);
+				interceptor?.MarkDirty();
 			}
 		}
 
@@ -401,18 +399,18 @@ namespace NHibernate.Event.Default
 				if (entry.Status != Status.Deleted)
 				{
 					// do nothing for persistent instances
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
-						log.Debug("persistent instance of: " + GetLoggableName(entityName, entity));
+						log.Debug("persistent instance of: {0}", GetLoggableName(entityName, entity));
 					}
 					return EntityState.Persistent;
 				}
 				else
 				{
 					//ie. e.status==DELETED
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
-						log.Debug("deleted instance of: " + GetLoggableName(entityName, entity));
+						log.Debug("deleted instance of: {0}", GetLoggableName(entityName, entity));
 					}
 					return EntityState.Deleted;
 				}
@@ -422,19 +420,22 @@ namespace NHibernate.Event.Default
 				//the object is transient or detached
 				//the entity is not associated with the session, so
 				//try interceptor and unsaved-value
-				if (ForeignKeys.IsTransient(entityName, entity, AssumedUnsaved, source))
+				var assumed = AssumedUnsaved;
+				if (assumed.HasValue
+					? ForeignKeys.IsTransientFast(entityName, entity, source).GetValueOrDefault(assumed.Value)
+					: ForeignKeys.IsTransientSlow(entityName, entity, source))
 				{
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
-						log.Debug("transient instance of: " + GetLoggableName(entityName, entity));
+						log.Debug("transient instance of: {0}", GetLoggableName(entityName, entity));
 					}
 					return EntityState.Transient;
 				}
 				else
 				{
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
-						log.Debug("detached instance of: " + GetLoggableName(entityName, entity));
+						log.Debug("detached instance of: {0}", GetLoggableName(entityName, entity));
 					}
 					return EntityState.Detached;
 				}

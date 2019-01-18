@@ -1,9 +1,9 @@
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 {
+	[TestFixture]
 	public class PoidTests
 	{
 		private class MyClass
@@ -18,7 +18,7 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 			var mapper = new ModelMapper(inspector);
 			mapper.Class<MyClass>(map => map.Id(x => x.Id, idmap => { }));
 
-			inspector.IsPersistentId(For<MyClass>.Property(x => x.Id)).Should().Be.True();
+			Assert.That(inspector.IsPersistentId(For<MyClass>.Property(x => x.Id)), Is.True);
 		}
 	}
 }

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using NHibernate.Criterion;
+using NHibernate.Multi;
 using NHibernate.Stat;
 using NUnit.Framework;
 
@@ -14,7 +15,7 @@ namespace NHibernate.Test.Stats
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "Stats.Continent.hbm.xml" }; }
 		}
@@ -47,7 +48,7 @@ namespace NHibernate.Test.Stats
 		[Test]
 		public void CollectionFetchVsLoad()
 		{
-			IStatistics stats = sessions.Statistics;
+			IStatistics stats = Sfi.Statistics;
 			stats.Clear();
 
 			ISession s = OpenSession();
@@ -139,7 +140,7 @@ namespace NHibernate.Test.Stats
 		[Test]
 		public void QueryStatGathering()
 		{
-			IStatistics stats = sessions.Statistics;
+			IStatistics stats = Sfi.Statistics;
 			stats.Clear();
 
 			ISession s = OpenSession();
@@ -221,7 +222,7 @@ namespace NHibernate.Test.Stats
 				tx.Commit();
 			}
 
-			IStatistics stats = sessions.Statistics;
+			IStatistics stats = Sfi.Statistics;
 			stats.Clear();
 			using (ISession s = OpenSession())
 			{
@@ -238,9 +239,10 @@ namespace NHibernate.Test.Stats
 
 			stats.Clear();
 
-			var driver = sessions.ConnectionProvider.Driver;
+			var driver = Sfi.ConnectionProvider.Driver;
 			if (driver.SupportsMultipleQueries)
 			{
+#pragma warning disable 618
 				using (var s = OpenSession())
 				{
 					var r = s.CreateMultiQuery().Add("from Country").Add("from Continent").List();
@@ -253,6 +255,27 @@ namespace NHibernate.Test.Stats
 					var r = s.CreateMultiCriteria().Add(DetachedCriteria.For<Country>()).Add(DetachedCriteria.For<Continent>()).List();
 				}
 				Assert.AreEqual(1, stats.QueryExecutionCount);
+#pragma warning restore 618
+
+				stats.Clear();
+				using (var s = OpenSession())
+				{
+					s.CreateQueryBatch()
+					 .Add<Country>(s.CreateQuery("from Country"))
+					 .Add<Continent>(s.CreateQuery("from Continent"))
+					 .Execute();
+				}
+				Assert.That(stats.QueryExecutionCount, Is.EqualTo(1));
+
+				stats.Clear();
+				using (var s = OpenSession())
+				{
+					s.CreateQueryBatch()
+					 .Add<Country>(DetachedCriteria.For<Country>())
+					 .Add<Continent>(DetachedCriteria.For<Continent>())
+					 .Execute();
+				}
+				Assert.That(stats.QueryExecutionCount, Is.EqualTo(1));
 			}
 
 			using (ISession s = OpenSession())

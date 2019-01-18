@@ -5,12 +5,12 @@ using NUnit.Framework;
 namespace NHibernate.Test.DriverTest
 {
 	/// <summary>
-	/// http://jira.nhibernate.org/browse/NH-177
+	/// http://nhibernate.jira.com/browse/NH-177
 	/// </summary>
 	[TestFixture]
 	public class NullReferenceFixture : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] {"Simple.hbm.xml"}; }
 		}

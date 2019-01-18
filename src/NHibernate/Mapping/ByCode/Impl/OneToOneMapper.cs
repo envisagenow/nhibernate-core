@@ -1,6 +1,9 @@
 using System;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using NHibernate.Cfg.MappingSchema;
+using NHibernate.Util;
 
 namespace NHibernate.Mapping.ByCode.Impl
 {
@@ -28,7 +31,12 @@ namespace NHibernate.Mapping.ByCode.Impl
 
 		public void Cascade(Cascade cascadeStyle)
 		{
-			_oneToOne.cascade = (cascadeStyle.Exclude(ByCode.Cascade.DeleteOrphans)).ToCascadeString();
+			_oneToOne.cascade = cascadeStyle.ToCascadeString();
+		}
+
+		public void Class(System.Type clazz)
+		{
+			_oneToOne.@class = clazz.FullName;
 		}
 
 		#endregion
@@ -95,7 +103,7 @@ namespace NHibernate.Mapping.ByCode.Impl
 				return;
 			}
 
-			string[] formulaLines = formula.Split(new[] {Environment.NewLine}, StringSplitOptions.None);
+			string[] formulaLines = formula.Split(StringHelper.LineSeparators, StringSplitOptions.None);
 			if (formulaLines.Length > 1)
 			{
 				_oneToOne.formula = new[] {new HbmFormula {Text = formulaLines}};
@@ -108,11 +116,42 @@ namespace NHibernate.Mapping.ByCode.Impl
 			}
 		}
 
+		public void Formulas(params string[] formulas)
+		{
+			if (formulas == null)
+				throw new ArgumentNullException(nameof(formulas));
+
+			_oneToOne.formula1 = null;
+			_oneToOne.formula =
+				formulas
+					.Select(
+						f => new HbmFormula { Text = f.Split(StringHelper.LineSeparators, StringSplitOptions.None) })
+					.ToArray();
+		}
+
 		public void ForeignKey(string foreignKeyName)
 		{
 			_oneToOne.foreignkey = foreignKeyName;
 		}
 
 		#endregion
+	}
+
+	public class OneToOneMapper<T> : OneToOneMapper, IOneToOneMapper<T>
+	{
+		public OneToOneMapper(MemberInfo member, HbmOneToOne oneToOne) 
+			: base(member, oneToOne)
+		{
+		}
+
+		public OneToOneMapper(MemberInfo member, IAccessorPropertyMapper accessorMapper, HbmOneToOne oneToOne)
+			: base(member, accessorMapper, oneToOne)
+		{
+		}
+
+		public void PropertyReference<TProperty>(Expression<Func<T, TProperty>> reference)
+		{
+			PropertyReference(TypeExtensions.DecodeMemberAccessExpression(reference));
+		}
 	}
 }

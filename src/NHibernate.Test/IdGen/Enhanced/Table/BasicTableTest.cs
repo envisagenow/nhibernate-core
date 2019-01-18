@@ -7,7 +7,7 @@ namespace NHibernate.Test.IdGen.Enhanced.Table
 	[TestFixture]
 	public class BasicTableTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "IdGen.Enhanced.Table.Basic.hbm.xml" }; }
 		}
@@ -21,7 +21,7 @@ namespace NHibernate.Test.IdGen.Enhanced.Table
 		[Test]
 		public void TestNormalBoundary()
 		{
-			var persister = sessions.GetEntityPersister(typeof(Entity).FullName);
+			var persister = Sfi.GetEntityPersister(typeof(Entity).FullName);
 			Assert.That(persister.IdentifierGenerator, Is.TypeOf<TableGenerator>());
 
 			var generator = (TableGenerator)persister.IdentifierGenerator;

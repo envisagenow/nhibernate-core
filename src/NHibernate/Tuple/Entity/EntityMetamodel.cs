@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-
+using NHibernate.Bytecode;
 using NHibernate.Engine;
 using NHibernate.Intercept;
 using NHibernate.Mapping;
@@ -14,7 +14,7 @@ namespace NHibernate.Tuple.Entity
 	[Serializable]
 	public class EntityMetamodel
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(EntityMetamodel));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(EntityMetamodel));
 
 		private const int NoVersionIndex = -66;
 
@@ -103,6 +103,8 @@ namespace NHibernate.Tuple.Entity
 			propertySpan = persistentClass.PropertyClosureSpan;
 			properties = new StandardProperty[propertySpan];
 			List<int> naturalIdNumbers = new List<int>();
+			var lazyPropertyDescriptors = new List<LazyPropertyDescriptor>();
+			var unwrapProxyPropertyDescriptors = new List<UnwrapProxyPropertyDescriptor>();
 
 			propertyNames = new string[propertySpan];
 			propertyTypes = new IType[propertySpan];
@@ -155,7 +157,7 @@ namespace NHibernate.Tuple.Entity
 					var getter = prop.GetGetter(persistentClass.MappedClass);
 					if (getter.Method == null || getter.Method.IsDefined(typeof(CompilerGeneratedAttribute), false) == false)
 					{
-						log.ErrorFormat("Lazy or no-proxy property {0}.{1} is not an auto property, which may result in uninitialized property access", persistentClass.EntityName, prop.Name);
+						log.Error("Lazy or no-proxy property {0}.{1} is not an auto property, which may result in uninitialized property access", persistentClass.EntityName, prop.Name);
 					}
 				}
 
@@ -182,10 +184,12 @@ namespace NHibernate.Tuple.Entity
 				if (islazyProperty)
 				{
 					hasLazy = true;
+					lazyPropertyDescriptors.Add(LazyPropertyDescriptor.From(prop, i, lazyPropertyDescriptors.Count));
 				}
 				if (isUnwrapProxy)
 				{
 					hasUnwrapProxyForProperties = true;
+					unwrapProxyPropertyDescriptors.Add(UnwrapProxyPropertyDescriptor.From(prop, i));
 				}
 
 				propertyLaziness[i] = islazyProperty;
@@ -255,20 +259,20 @@ namespace NHibernate.Tuple.Entity
 
 			if(hadLazyProperties && !hasLazy)
 			{
-				log.WarnFormat("Disabled lazy property fetching for {0} because it does not support lazy at the entity level", name);
+				log.Warn("Disabled lazy property fetching for {0} because it does not support lazy at the entity level", name);
 			}
 			if (hasLazy)
 			{
-				log.Info("lazy property fetching available for: " + name);
+				log.Info("lazy property fetching available for: {0}", name);
 			}
 
 			if(hadNoProxyRelations && !hasUnwrapProxyForProperties)
 			{
-				log.WarnFormat("Disabled ghost property fetching for {0} because it does not support lazy at the entity level", name);
+				log.Warn("Disabled ghost property fetching for {0} because it does not support lazy at the entity level", name);
 			}
 			if (hasUnwrapProxyForProperties)
 			{
-				log.Info("no-proxy property fetching available for: " + name);
+				log.Info("no-proxy property fetching available for: {0}", name);
 			}
 
 			mutable = persistentClass.IsMutable;
@@ -284,8 +288,8 @@ namespace NHibernate.Tuple.Entity
 				if (!isAbstract && persistentClass.HasPocoRepresentation
 				    && ReflectHelper.IsAbstractClass(persistentClass.MappedClass))
 				{
-					log.Warn("entity [" + type.FullName
-					         + "] is abstract-class/interface explicitly mapped as non-abstract; be sure to supply entity-names");
+					log.Warn("entity [{0}] is abstract-class/interface explicitly mapped as non-abstract; be sure to supply entity-names",
+						type.FullName);
 				}
 			}
 			selectBeforeUpdate = persistentClass.SelectBeforeUpdate;
@@ -314,7 +318,23 @@ namespace NHibernate.Tuple.Entity
 			}
 			subclassEntityNames.Add(name);
 
-			tuplizerMapping = new EntityEntityModeToTuplizerMapping(persistentClass, this);
+			EntityMode = persistentClass.HasPocoRepresentation ? EntityMode.Poco : EntityMode.Map;
+
+			if (persistentClass.HasPocoRepresentation)
+			{
+				BytecodeEnhancementMetadata = BytecodeEnhancementMetadataPocoImpl
+					.From(persistentClass, lazyPropertyDescriptors, unwrapProxyPropertyDescriptors);
+			}
+			else
+			{
+				BytecodeEnhancementMetadata = new BytecodeEnhancementMetadataNonPocoImpl(persistentClass.EntityName);
+			}
+
+			var entityTuplizerFactory = new EntityTuplizerFactory();
+			var tuplizerClassName = persistentClass.GetTuplizerImplClassName(EntityMode);
+			Tuplizer = tuplizerClassName == null
+				? entityTuplizerFactory.BuildDefaultEntityTuplizer(EntityMode, this, persistentClass)
+				: entityTuplizerFactory.BuildEntityTuplizer(tuplizerClassName, this, persistentClass);
 		}
 
 		public bool HasPocoRepresentation { get; private set; }
@@ -685,25 +705,11 @@ namespace NHibernate.Tuple.Entity
 
 		#endregion
 
-		#region Tuplizer
-		private readonly EntityEntityModeToTuplizerMapping tuplizerMapping;
 		private bool hasUnwrapProxyForProperties;
 
-		public IEntityTuplizer GetTuplizer(EntityMode entityMode)
-		{
-			return (IEntityTuplizer)tuplizerMapping.GetTuplizer(entityMode);
-		}
+		public IEntityTuplizer Tuplizer { get; }
 
-		public IEntityTuplizer GetTuplizerOrNull(EntityMode entityMode)
-		{
-			return (IEntityTuplizer)tuplizerMapping.GetTuplizerOrNull(entityMode);
-		}
-
-		public EntityMode? GuessEntityMode(object obj)
-		{
-			return tuplizerMapping.GuessEntityMode(obj);
-		}
-		#endregion
+		public EntityMode EntityMode { get; }
 
 		public bool HasNaturalIdentifier
 		{
@@ -724,5 +730,7 @@ namespace NHibernate.Tuple.Entity
 		{
 			get { return naturalIdPropertyNumbers; }
 		}
+
+		public IBytecodeEnhancementMetadata BytecodeEnhancementMetadata { get; }
 	}
 }

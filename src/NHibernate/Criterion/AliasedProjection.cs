@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-	
 using NHibernate.SqlCommand;
 using NHibernate.Engine;
 using NHibernate.Type;
@@ -8,7 +6,7 @@ using NHibernate.Type;
 namespace NHibernate.Criterion
 {
 	[Serializable]
-	public class AliasedProjection : IEnhancedProjection
+	public class AliasedProjection : IProjection
 	{
 		private readonly IProjection projection;
 		private readonly string alias;
@@ -19,14 +17,14 @@ namespace NHibernate.Criterion
 			this.alias = alias;
 		}
 
-		public virtual SqlString ToSqlString(ICriteria criteria, int position, ICriteriaQuery criteriaQuery, IDictionary<string, IFilter> enabledFilters)
+		public virtual SqlString ToSqlString(ICriteria criteria, int position, ICriteriaQuery criteriaQuery)
 		{
-			return projection.ToSqlString(criteria, position, criteriaQuery,enabledFilters);
+			return projection.ToSqlString(criteria, position, criteriaQuery);
 		}
 
-		public virtual SqlString ToGroupSqlString(ICriteria criteria, ICriteriaQuery criteriaQuery, IDictionary<string, IFilter> enabledFilters)
+		public virtual SqlString ToGroupSqlString(ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return projection.ToGroupSqlString(criteria, criteriaQuery,enabledFilters);
+			return projection.ToGroupSqlString(criteria, criteriaQuery);
 		}
 
 		public virtual IType[] GetTypes(ICriteria criteria, ICriteriaQuery criteriaQuery)
@@ -41,23 +39,9 @@ namespace NHibernate.Criterion
 				: null;
 		}
 
-		public virtual string[] GetColumnAliases(int loc)
-		{
-			return projection.GetColumnAliases(loc);
-		}
-
-		public virtual string[] GetColumnAliases(string alias, int loc)
-		{
-			return this.alias.Equals(alias)
-				? GetColumnAliases(loc)
-				: null;
-		}
-		
 		public string[] GetColumnAliases(int position, ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return projection is IEnhancedProjection
-				? ((IEnhancedProjection)projection).GetColumnAliases(position, criteria, criteriaQuery)
-				: this.GetColumnAliases(position);
+			return projection.GetColumnAliases(position, criteria, criteriaQuery);
 		}
 		
 		public string[] GetColumnAliases(string alias, int position, ICriteria criteria, ICriteriaQuery criteriaQuery)

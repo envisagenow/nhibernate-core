@@ -1,4 +1,8 @@
+using System;
 using NHibernate.Cfg;
+using NHibernate.Driver;
+using NHibernate.Engine;
+using NHibernate.Multi;
 using NUnit.Framework;
 
 namespace NHibernate.Test.NHSpecificTest.SqlConverterAndMultiQuery
@@ -13,6 +17,15 @@ namespace NHibernate.Test.NHSpecificTest.SqlConverterAndMultiQuery
 			configuration.DataBaseIntegration(x => x.ExceptionConverter<SqlConverter>());
 		}
 
+		protected override bool AppliesTo(ISessionFactoryImplementor factory)
+		{
+			// Test current implementation allows to test mmostly SQL Server. Other databases
+			// tend to (validly) send InvalidOperationException during prepare phase due to the closed
+			// connection, which get not converted. For testing other case, maybe a failure caused by a
+			// schema mismatch (like done in transaction tests) would be better.
+			return factory.ConnectionProvider.Driver is SqlClientDriver;
+		}
+
 		[Test]
 		public void NormalHqlShouldThrowUserException()
 		{
@@ -25,10 +38,10 @@ namespace NHibernate.Test.NHSpecificTest.SqlConverterAndMultiQuery
 			}
 		}
 
-		[Test]
+		[Test, Obsolete]
 		public void MultiHqlShouldThrowUserException()
 		{
-			var driver = sessions.ConnectionProvider.Driver;
+			var driver = Sfi.ConnectionProvider.Driver;
 			if (!driver.SupportsMultipleQueries)
 				Assert.Ignore("Driver {0} does not support multi-queries", driver.GetType().FullName);
 
@@ -39,6 +52,19 @@ namespace NHibernate.Test.NHSpecificTest.SqlConverterAndMultiQuery
 				multi.Add(hqlQuery);
 				s.Connection.Close();
 				Assert.Throws<UnitTestException>(() => multi.List());
+			}
+		}
+
+		[Test]
+		public void QueryBatchShouldThrowUserException()
+		{
+			using (var s = OpenSession())
+			using (s.BeginTransaction())
+			{
+				var multi = s.CreateQueryBatch();
+				multi.Add<int>(s.CreateQuery(hqlQuery));
+				s.Connection.Close();
+				Assert.Throws<UnitTestException>(multi.Execute);
 			}
 		}
 
@@ -54,10 +80,10 @@ namespace NHibernate.Test.NHSpecificTest.SqlConverterAndMultiQuery
 			}
 		}
 
-		[Test]
+		[Test, Obsolete]
 		public void MultiCriteriaShouldThrowUserException()
 		{
-			var driver = sessions.ConnectionProvider.Driver;
+			var driver = Sfi.ConnectionProvider.Driver;
 			if (!driver.SupportsMultipleQueries)
 				Assert.Ignore("Driver {0} does not support multi-queries", driver.GetType().FullName);
 
@@ -68,6 +94,19 @@ namespace NHibernate.Test.NHSpecificTest.SqlConverterAndMultiQuery
 				multi.Add(s.CreateCriteria(typeof (ClassA)));
 				s.Connection.Close();
 				Assert.Throws<UnitTestException>(() => multi.List());
+			}
+		}
+
+		[Test]
+		public void CriteriaQueryBatchShouldThrowUserException()
+		{
+			using (var s = OpenSession())
+			using (s.BeginTransaction())
+			{
+				var multi = s.CreateQueryBatch();
+				multi.Add<ClassA>(s.CreateCriteria(typeof(ClassA)));
+				s.Connection.Close();
+				Assert.Throws<UnitTestException>(multi.Execute);
 			}
 		}
 	}

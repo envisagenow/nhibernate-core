@@ -14,7 +14,7 @@ namespace NHibernate.Test.DialectTest.FunctionTests
 		/// <summary>
 		/// Test case data source for DialectShouldUseCorrectSubstringImplementation().
 		/// </summary>
-		private IEnumerable<System.Type> GetAllDialectTypes()
+		private static IEnumerable<System.Type> GetAllDialectTypes()
 		{
 			var dialectBaseType = typeof(NHibernate.Dialect.Dialect);
 
@@ -24,7 +24,7 @@ namespace NHibernate.Test.DialectTest.FunctionTests
 		}
 
 
-		[TestCaseSource("GetAllDialectTypes")]
+		[TestCaseSource(nameof(GetAllDialectTypes))]
 		public void DialectShouldUseCorrectSubstringImplementation(System.Type dialectType)
 		{
 			var dialect = (NHibernate.Dialect.Dialect)Activator.CreateInstance(dialectType);
@@ -34,18 +34,28 @@ namespace NHibernate.Test.DialectTest.FunctionTests
 
 			var substringFunction = dialect.Functions["substring"];
 
-			if (dialect is MsSql2000Dialect || dialect is MsSqlCeDialect || dialect is SybaseASE15Dialect)
-				Assert.That(substringFunction, Is.TypeOf<EmulatedLengthSubstringFunction>());
-			else if (dialect is DB2Dialect)
-				Assert.That(substringFunction, Is.TypeOf<SQLFunctionTemplate>());
-			else if (dialect is SybaseSQLAnywhere10Dialect)
-				Assert.That(substringFunction, Is.TypeOf<VarArgsSQLFunction>());
-			else if (dialect is Oracle8iDialect)
-				Assert.That(substringFunction, Is.TypeOf<StandardSQLFunction>());
-			else if (dialect is SQLiteDialect)
-				Assert.That(substringFunction, Is.TypeOf<StandardSQLFunction>());
-			else
-				Assert.That(substringFunction, Is.TypeOf<AnsiSubstringFunction>());
+			switch (dialect)
+			{
+				case MsSql2000Dialect _:
+				case MsSqlCeDialect _:
+				case SybaseASE15Dialect _:
+					Assert.That(substringFunction, Is.TypeOf<EmulatedLengthSubstringFunction>());
+					break;
+				case DB2Dialect _:
+					Assert.That(substringFunction, Is.TypeOf<SQLFunctionTemplate>());
+					break;
+				case SybaseSQLAnywhere10Dialect _:
+					Assert.That(substringFunction, Is.TypeOf<VarArgsSQLFunction>());
+					break;
+				case Oracle8iDialect _:
+				case SQLiteDialect _:
+				case HanaDialectBase _:
+					Assert.That(substringFunction, Is.TypeOf<StandardSQLFunction>());
+					break;
+				default:
+					Assert.That(substringFunction, Is.TypeOf<AnsiSubstringFunction>());
+					break;
+			}
 
 		}
 	}

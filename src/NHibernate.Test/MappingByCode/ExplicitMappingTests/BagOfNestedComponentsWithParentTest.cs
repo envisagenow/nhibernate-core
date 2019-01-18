@@ -3,10 +3,10 @@ using System.Linq;
 using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 {
+	[TestFixture]
 	public class BagOfNestedComponentsWithParentTest
 	{
 		private class Person
@@ -49,7 +49,7 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 				cm.Bag(x => x.Addresses, cp => { }, cr => { });
 			});
 			HbmMapping mapping = mapper.CompileMappingFor(new[] { typeof(Person) });
-			VerifyMapping(mapping);
+			VerifyMapping(mapping, false, "Street", "Number", "Owner");
 		}
 
 		[Test]
@@ -72,7 +72,7 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 				}));
 			});
 			HbmMapping mapping = mapper.CompileMappingFor(new[] { typeof(Person) });
-			VerifyMapping(mapping);
+			VerifyMapping(mapping, false, "Street", "Number", "Owner");
 		}
 
 		[Test]
@@ -94,33 +94,40 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 				}));
 			});
 			HbmMapping mapping = mapper.CompileMappingFor(new[] { typeof(Person) });
-			VerifyMapping(mapping);
+			VerifyMapping(mapping, true, "Street", "Number");
 		}
 
-		private void VerifyMapping(HbmMapping mapping)
+		private void VerifyMapping(HbmMapping mapping, bool hasParent, params string[] properties)
 		{
 			HbmClass rc = mapping.RootClasses.First(r => r.Name.Contains("Person"));
 			var relation = rc.Properties.First(p => p.Name == "Addresses");
 			var collection = (HbmBag)relation;
-			collection.ElementRelationship.Should().Be.OfType<HbmCompositeElement>();
+			Assert.That(collection.ElementRelationship, Is.TypeOf<HbmCompositeElement>());
 			var elementRelation = (HbmCompositeElement)collection.ElementRelationship;
-			elementRelation.Class.Should().Contain("Address");
+			Assert.That(elementRelation.Class, Does.Contain("Address"));
 			
 			// This test was modified because when the "owner" is an entity it can be mapped as many-to-one or as parent and without an explicit
 			// definition of the property representing the bidiretional-relation we can't know is the mapping element (many-to-one or parent)
-			elementRelation.Properties.Should().Have.Count.EqualTo(3);
-			elementRelation.Properties.Select(p => p.Name).Should().Have.SameValuesAs("Street", "Number", "Owner");
-			//elementRelation.Parent.Should().Not.Be.Null();
-			//elementRelation.Parent.name.Should().Be.EqualTo("Owner");
+			Assert.That(elementRelation.Properties.Count(), Is.EqualTo(properties.Length));
+			Assert.That(elementRelation.Properties.Select(p => p.Name), Is.EquivalentTo(properties));
+			if (hasParent)
+			{
+				Assert.That(elementRelation.Parent, Is.Not.Null);
+				Assert.That(elementRelation.Parent.name, Is.EqualTo("Owner"));
+			}
+			else
+			{
+				Assert.That(elementRelation.Parent, Is.Null);
+			}
 			
 			// Nested
 			var propertyNestedRelation = elementRelation.Properties.FirstOrDefault(p => p.Name == "Number");
-			propertyNestedRelation.Should().Not.Be.Null().And.Be.OfType<HbmNestedCompositeElement>();
+			Assert.That(propertyNestedRelation, Is.Not.Null.And.TypeOf<HbmNestedCompositeElement>());
 			var nestedRelation = (HbmNestedCompositeElement) propertyNestedRelation;
-			nestedRelation.Class.Should().Contain("Number");
-			nestedRelation.Properties.Should().Have.Count.EqualTo(1);
-			nestedRelation.Parent.Should().Not.Be.Null();
-			nestedRelation.Parent.name.Should().Be.EqualTo("OwnerAddress");
+			Assert.That(nestedRelation.Class, Does.Contain("Number"));
+			Assert.That(nestedRelation.Properties.Count(), Is.EqualTo(1));
+			Assert.That(nestedRelation.Parent, Is.Not.Null);
+			Assert.That(nestedRelation.Parent.name, Is.EqualTo("OwnerAddress"));
 		}
 	}
 }

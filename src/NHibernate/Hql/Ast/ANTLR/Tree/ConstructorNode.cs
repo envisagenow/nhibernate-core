@@ -14,6 +14,7 @@ namespace NHibernate.Hql.Ast.ANTLR.Tree
 		private ConstructorInfo _constructor;
 		private bool _isMap;
 		private bool _isList;
+		private int _scalarColumnIndex = -1;
 
 		public ConstructorNode(IToken token) : base(token)
 		{
@@ -40,6 +41,22 @@ namespace NHibernate.Hql.Ast.ANTLR.Tree
 		{
 			// Collect the select expressions, skip the first child because it is the class name.
 			return GetChild(1);
+		}
+
+		public int ScalarColumnIndex
+		{
+			get { return _scalarColumnIndex; }
+		}
+
+		public void SetScalarColumn(int i)
+		{
+			ISelectExpression[] selectExpressions = CollectSelectExpressions();
+			// Invoke setScalarColumnText on each constructor argument.
+			for (int j = 0; j < selectExpressions.Length; j++)
+			{
+				ISelectExpression selectExpression = selectExpressions[j];
+				selectExpression.SetScalarColumn(j);
+			}
 		}
 
 		public void SetScalarColumnText(int i)
@@ -99,17 +116,17 @@ namespace NHibernate.Hql.Ast.ANTLR.Tree
 			_constructorArgumentTypes = ResolveConstructorArgumentTypes();
 			string path = ( ( IPathNode ) GetChild(0) ).Path;
 
-			if (path.ToLowerInvariant() == "map")
+			if (string.Equals(path, "map", StringComparison.OrdinalIgnoreCase))
 			{
 				_isMap = true;
 			}
-			else if (path.ToLowerInvariant() == "list") 
+			else if (string.Equals(path, "list", StringComparison.OrdinalIgnoreCase)) 
 			{
 				_isList = true;
 			}
 			else 
 			{
-                _constructor = ResolveConstructor(path);
+				_constructor = ResolveConstructor(path);
 			}
 		}
 
@@ -120,7 +137,7 @@ namespace NHibernate.Hql.Ast.ANTLR.Tree
 			if ( argumentExpressions == null ) 
 			{
 				// return an empty Type array
-				return new IType[]{};
+				return Array.Empty<IType>();
 			}
 
 			IType[] types = new IType[argumentExpressions.Length];

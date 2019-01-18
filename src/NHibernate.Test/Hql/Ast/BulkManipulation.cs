@@ -6,7 +6,6 @@ using NHibernate.Hql.Ast.ANTLR;
 using NHibernate.Id;
 using NHibernate.Persister.Entity;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.Hql.Ast
 {
@@ -16,6 +15,12 @@ namespace NHibernate.Test.Hql.Ast
 		public ISession OpenNewSession()
 		{
 			return OpenSession();
+		}
+
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			// Some classes are mapped with table joins, which requires temporary tables for DML to work.
+			return Dialect.SupportsTemporaryTables;
 		}
 
 		#region Non-exists
@@ -66,6 +71,29 @@ namespace NHibernate.Test.Hql.Ast
 		}
 
 		[Test]
+		public void SimpleInsertFromAggregate()
+		{
+			var data = new TestData(this);
+			data.Prepare();
+
+			ISession s = OpenSession();
+			ITransaction t = s.BeginTransaction();
+
+			s.CreateQuery("insert into Pickup (id, Vin, Owner) select id, max(Vin), max(Owner) from Car group by id").ExecuteUpdate();
+
+			t.Commit();
+			t = s.BeginTransaction();
+
+			s.CreateQuery("delete Vehicle").ExecuteUpdate();
+
+			t.Commit();
+			s.Close();
+
+			data.Cleanup();
+		}
+
+		
+		[Test]
 		public void InsertWithManyToOne()
 		{
 			var data = new TestData(this);
@@ -77,6 +105,31 @@ namespace NHibernate.Test.Hql.Ast
 			s.CreateQuery(
 				"insert into Animal (description, bodyWeight, mother) select description, bodyWeight, mother from Human").
 				ExecuteUpdate();
+
+			t.Commit();
+			t = s.BeginTransaction();
+
+			t.Commit();
+			s.Close();
+
+			data.Cleanup();
+		}
+
+		[Test]
+		public void InsertWithManyToOneAsParameter()
+		{
+			var data = new TestData(this);
+			data.Prepare();
+
+			ISession s = OpenSession();
+			ITransaction t = s.BeginTransaction();
+
+			var mother = data.Butterfly;
+
+			s.CreateQuery(
+				"insert into Animal (description, bodyWeight, mother) select description, bodyWeight, :mother from Human")
+				.SetEntity("mother",mother)
+				.ExecuteUpdate();
 
 			t.Commit();
 			t = s.BeginTransaction();
@@ -164,7 +217,7 @@ namespace NHibernate.Test.Hql.Ast
 		public void InsertWithGeneratedId()
 		{
 			// Make sure the env supports bulk inserts with generated ids...
-			IEntityPersister persister = sessions.GetEntityPersister(typeof (PettingZoo).FullName);
+			IEntityPersister persister = Sfi.GetEntityPersister(typeof (PettingZoo).FullName);
 			IIdentifierGenerator generator = persister.IdentifierGenerator;
 			if (!HqlSqlWalker.SupportsIdGenWithBulkInsertion(generator))
 			{
@@ -207,7 +260,7 @@ namespace NHibernate.Test.Hql.Ast
 		public void InsertWithGeneratedVersionAndId()
 		{
 			// Make sure the env supports bulk inserts with generated ids...
-			IEntityPersister persister = sessions.GetEntityPersister(typeof (IntegerVersioned).FullName);
+			IEntityPersister persister = Sfi.GetEntityPersister(typeof (IntegerVersioned).FullName);
 			IIdentifierGenerator generator = persister.IdentifierGenerator;
 			if (!HqlSqlWalker.SupportsIdGenWithBulkInsertion(generator))
 			{
@@ -228,7 +281,10 @@ namespace NHibernate.Test.Hql.Ast
 
 			s = OpenSession();
 			t = s.BeginTransaction();
-			int count = s.CreateQuery("insert into IntegerVersioned ( name ) select name from IntegerVersioned").ExecuteUpdate();
+			int count =
+				s.CreateQuery("insert into IntegerVersioned ( name, Data ) select name, Data from IntegerVersioned where id = :id")
+					.SetInt64("id", entity.Id)
+					.ExecuteUpdate();
 			t.Commit();
 			s.Close();
 
@@ -255,7 +311,7 @@ namespace NHibernate.Test.Hql.Ast
 		public void InsertWithGeneratedTimestampVersion()
 		{
 			// Make sure the env supports bulk inserts with generated ids...
-			IEntityPersister persister = sessions.GetEntityPersister(typeof (TimestampVersioned).FullName);
+			IEntityPersister persister = Sfi.GetEntityPersister(typeof (TimestampVersioned).FullName);
 			IIdentifierGenerator generator = persister.IdentifierGenerator;
 			if (!HqlSqlWalker.SupportsIdGenWithBulkInsertion(generator))
 			{
@@ -277,7 +333,10 @@ namespace NHibernate.Test.Hql.Ast
 			s = OpenSession();
 			t = s.BeginTransaction();
 			int count =
-				s.CreateQuery("insert into TimestampVersioned ( name ) select name from TimestampVersioned").ExecuteUpdate();
+				s.CreateQuery(
+					"insert into TimestampVersioned ( name, Data ) select name, Data from TimestampVersioned where id = :id")
+					.SetInt64("id", entity.Id)
+					.ExecuteUpdate();
 			t.Commit();
 			s.Close();
 
@@ -344,8 +403,8 @@ namespace NHibernate.Test.Hql.Ast
 			s = OpenSession();
 			t = s.BeginTransaction();
 			string updateQryString = "update Human h " + "set h.description = 'updated' " + "where exists ("
-			                         + "      select f.id " + "      from h.friends f " + "      where f.name.last = 'Public' "
-			                         + ")";
+									 + "      select f.id " + "      from h.friends f " + "      where f.name.last = 'Public' "
+									 + ")";
 			int count = s.CreateQuery(updateQryString).ExecuteUpdate();
 			Assert.That(count, Is.EqualTo(1));
 			s.Delete(doll);
@@ -370,15 +429,15 @@ namespace NHibernate.Test.Hql.Ast
 			t = s.BeginTransaction();
 			// one-to-many test
 			updateQryString = "update SimpleEntityWithAssociation e set e.Name = 'updated' where "
-			                  + "exists(select a.id from e.AssociatedEntities a " + "where a.Name = 'one-to-many-association')";
+							  + "exists(select a.id from e.AssociatedEntities a " + "where a.Name = 'one-to-many-association')";
 			count = s.CreateQuery(updateQryString).ExecuteUpdate();
 			Assert.That(count, Is.EqualTo(1));
 			// many-to-many test
 			if (Dialect.SupportsSubqueryOnMutatingTable)
 			{
 				updateQryString = "update SimpleEntityWithAssociation e set e.Name = 'updated' where "
-				                  + "exists(select a.id from e.ManyToManyAssociatedEntities a "
-				                  + "where a.Name = 'many-to-many-association')";
+								  + "exists(select a.id from e.ManyToManyAssociatedEntities a "
+								  + "where a.Name = 'many-to-many-association')";
 				count = s.CreateQuery(updateQryString).ExecuteUpdate();
 				Assert.That(count, Is.EqualTo(1));
 			}
@@ -393,59 +452,81 @@ namespace NHibernate.Test.Hql.Ast
 		[Test]
 		public void IncrementCounterVersion()
 		{
-			ISession s = OpenSession();
-			ITransaction t = s.BeginTransaction();
+			IntegerVersioned entity;
 
-			var entity = new IntegerVersioned {Name = "int-vers"};
-			s.Save(entity);
-			t.Commit();
-			s.Close();
+			using (ISession s = OpenSession())
+			using (ITransaction t = s.BeginTransaction())
+			{
+				entity = new IntegerVersioned {Name = "int-vers", Data = "foo"};
+				s.Save(entity);
+				t.Commit();
+			}
 
 			int initialVersion = entity.Version;
 
-			s = OpenSession();
-			t = s.BeginTransaction();
-			int count = s.CreateQuery("update versioned IntegerVersioned set name = name").ExecuteUpdate();
-			Assert.That(count, Is.EqualTo(1), "incorrect exec count");
-			t.Commit();
+			using (ISession s = OpenSession())
+			{
+				using (ITransaction t = s.BeginTransaction())
+				{
+					// Note: Update more than one column to showcase NH-3624, which involved losing some columns. /2014-07-26
+					int count = s.CreateQuery("update versioned IntegerVersioned set name = concat(name, 'upd'), Data = concat(Data, 'upd')")
+						.ExecuteUpdate();
+					Assert.That(count, Is.EqualTo(1), "incorrect exec count");
+					t.Commit();
+				}
 
-			t = s.BeginTransaction();
-			entity = s.Load<IntegerVersioned>(entity.Id);
+				using (ITransaction t = s.BeginTransaction())
+				{
+					entity = s.Get<IntegerVersioned>(entity.Id);
+					s.Delete(entity);
+					t.Commit();
+				}
+			}
+
 			Assert.That(entity.Version, Is.EqualTo(initialVersion + 1), "version not incremented");
-
-			s.Delete(entity);
-			t.Commit();
-			s.Close();
+			Assert.That(entity.Name, Is.EqualTo("int-versupd"));
+			Assert.That(entity.Data, Is.EqualTo("fooupd"));
 		}
 
 		[Test]
 		public void IncrementTimestampVersion()
 		{
-			ISession s = OpenSession();
-			ITransaction t = s.BeginTransaction();
+			TimestampVersioned entity;
 
-			var entity = new TimestampVersioned {Name = "ts-vers"};
-			s.Save(entity);
-			t.Commit();
-			s.Close();
+			using (ISession s = OpenSession())
+			using(ITransaction t = s.BeginTransaction())
+			{
+				entity = new TimestampVersioned { Name = "ts-vers", Data = "foo" };
+				s.Save(entity);
+				t.Commit();
+			}
 
 			DateTime initialVersion = entity.Version;
 
 			Thread.Sleep(1300);
 
-			s = OpenSession();
-			t = s.BeginTransaction();
-			int count = s.CreateQuery("update versioned TimestampVersioned set name = name").ExecuteUpdate();
-			Assert.That(count, Is.EqualTo(1), "incorrect exec count");
-			t.Commit();
+			using (ISession s = OpenSession())
+			{
+				using (ITransaction t = s.BeginTransaction())
+				{
+					// Note: Update more than one column to showcase NH-3624, which involved losing some columns. /2014-07-26
+					int count = s.CreateQuery("update versioned TimestampVersioned set name = concat(name, 'upd'), Data = concat(Data, 'upd')")
+						.ExecuteUpdate();
+					Assert.That(count, Is.EqualTo(1), "incorrect exec count");
+					t.Commit();
+				}
 
-			t = s.BeginTransaction();
-			entity = s.Load<TimestampVersioned>(entity.Id);
+				using (ITransaction t = s.BeginTransaction())
+				{
+					entity = s.Load<TimestampVersioned>(entity.Id);
+					s.Delete(entity);
+					t.Commit();
+				}
+			}
+
 			Assert.That(entity.Version, Is.GreaterThan(initialVersion), "version not incremented");
-
-			s.Delete(entity);
-			t.Commit();
-			s.Close();
+			Assert.That(entity.Name, Is.EqualTo("ts-versupd"));
+			Assert.That(entity.Data, Is.EqualTo("fooupd"));
 		}
 
 		[Test]
@@ -486,9 +567,8 @@ namespace NHibernate.Test.Hql.Ast
 			ITransaction t = s.BeginTransaction();
 
 			s.CreateQuery("update Animal a set a.mother = null where a.id = 2").ExecuteUpdate();
-			if (! (Dialect is MySQLDialect))
+			if (Dialect.SupportsSubqueryOnMutatingTable)
 			{
-				// MySQL does not support (even un-correlated) subqueries against the update-mutating table
 				s.CreateQuery("update Animal a set a.mother = (from Animal where id = 1) where a.id = 2").ExecuteUpdate();
 			}
 
@@ -517,7 +597,7 @@ namespace NHibernate.Test.Hql.Ast
 			var e =
 				Assert.Throws<QueryException>(
 					() => s.CreateQuery("update Human set mother.name.initial = :initial").SetString("initial", "F").ExecuteUpdate());
-			Assert.That(e.Message, Is.StringStarting("Implied join paths are not assignable in update"));
+			Assert.That(e.Message, Does.StartWith("Implied join paths are not assignable in update"));
 
 			s.CreateQuery("delete Human where mother is not null").ExecuteUpdate();
 			s.CreateQuery("delete Human").ExecuteUpdate();
@@ -592,14 +672,13 @@ namespace NHibernate.Test.Hql.Ast
 
 			count =
 				s.CreateQuery("update Animal set bodyWeight = bodyWeight + :w1 + :w2")
-				.SetDouble("w1", 1)
-				.SetDouble("w2", 2)
+				.SetSingle("w1", 1)
+				.SetSingle("w2", 2)
 				.ExecuteUpdate();
 			Assert.That(count, Is.EqualTo(6), "incorrect count on 'complex' update assignment");
 
-			if (! (Dialect is MySQLDialect))
+			if (Dialect.SupportsSubqueryOnMutatingTable)
 			{
-				// MySQL does not support (even un-correlated) subqueries against the update-mutating table
 				s.CreateQuery("update Animal set bodyWeight = ( select max(bodyWeight) from Animal )").ExecuteUpdate();
 			}
 
@@ -622,10 +701,10 @@ namespace NHibernate.Test.Hql.Ast
 					s.CreateQuery("update Animal set description = :newDesc, bodyWeight = :w1 where description = :desc")
 						.SetString("desc", data.Polliwog.Description)
 						.SetString("newDesc", "Tadpole")
-						.SetDouble("w1", 3)
+						.SetSingle("w1", 3)
 						.ExecuteUpdate();
 				
-				count.Should().Be(1);
+				Assert.That(count, Is.EqualTo(1));
 				t.Commit();
 			}
 
@@ -633,8 +712,8 @@ namespace NHibernate.Test.Hql.Ast
 			using (s.BeginTransaction())
 			{
 				var tadpole = s.Get<Animal>(data.Polliwog.Id);
-				tadpole.Description.Should().Be("Tadpole");
-				tadpole.BodyWeight.Should().Be(3);
+				Assert.That(tadpole.Description, Is.EqualTo("Tadpole"));
+				Assert.That(tadpole.BodyWeight, Is.EqualTo(3));
 			}
 
 			data.Cleanup();
@@ -655,9 +734,8 @@ namespace NHibernate.Test.Hql.Ast
 			count = s.CreateQuery("update Mammal set bodyWeight = 25").ExecuteUpdate();
 			Assert.That(count, Is.EqualTo(2), "incorrect update count against 'middle' of joined-subclass hierarchy");
 
-			if (! (Dialect is MySQLDialect))
+			if (Dialect.SupportsSubqueryOnMutatingTable)
 			{
-				// MySQL does not support (even un-correlated) subqueries against the update-mutating table
 				count = s.CreateQuery("update Mammal set bodyWeight = ( select max(bodyWeight) from Animal )").ExecuteUpdate();
 				Assert.That(count, Is.EqualTo(2), "incorrect update count against 'middle' of joined-subclass hierarchy");
 			}
@@ -698,7 +776,7 @@ namespace NHibernate.Test.Hql.Ast
 			using (ISession s = OpenSession())
 			{
 				var e = Assert.Throws<QueryException>(() => s.CreateQuery("update Vehicle set owner = null where owner = 'Steve'").ExecuteUpdate());
-				Assert.That(e.Message, Is.StringStarting("Left side of assigment should be a case sensitive property or a field"));
+				Assert.That(e.Message, Does.StartWith("Left side of assigment should be a case sensitive property or a field"));
 			}
 		}
 

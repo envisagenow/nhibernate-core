@@ -1,10 +1,11 @@
 using System;
 using System.Collections;
+using NHibernate.Util;
 
 namespace NHibernate.Transform
 {
 	[Serializable]
-	public class PassThroughResultTransformer : IResultTransformer
+	public class PassThroughResultTransformer : IResultTransformer, ITupleSubsetResultTransformer
 	{
 		private static readonly object Hasher = new object();
 
@@ -22,13 +23,51 @@ namespace NHibernate.Transform
 
 		#endregion
 
+
+		public bool IsTransformedValueATupleElement(string[] aliases, int tupleLength)
+		{
+			return tupleLength == 1;
+		}
+
+
+		public bool[] IncludeInTransform(string[] aliases, int tupleLength)
+		{
+			bool[] includeInTransformedResult = new bool[tupleLength];
+			ArrayHelper.Fill(includeInTransformedResult, true);
+			return includeInTransformedResult;
+		}
+
+
+		internal IList UntransformToTuples(IList results, bool isSingleResult)
+		{
+			// untransform only if necessary; if transformed, do it in place;
+			if (isSingleResult)
+			{
+				for (int i = 0; i < results.Count; i++)
+				{
+					Object[] tuple = UntransformToTuple(results[i], isSingleResult);
+					results[i]= tuple;
+				}
+			}
+			return results;
+		}
+
+
+		internal object[] UntransformToTuple(object transformed, bool isSingleResult)
+		{
+			return isSingleResult ? new[] {transformed} : (object[]) transformed;
+		}
+
+
 		public override bool Equals(object obj)
 		{
-			if (obj == null)
+			if (obj == null || obj.GetHashCode() != Hasher.GetHashCode())
 			{
 				return false;
 			}
-			return obj.GetHashCode() == Hasher.GetHashCode();
+			// NH-3957: do not rely on hashcode alone.
+			// Must be the exact same type
+			return obj.GetType() == typeof(PassThroughResultTransformer);
 		}
 
 		public override int GetHashCode()

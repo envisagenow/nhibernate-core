@@ -22,6 +22,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithCountSubquery()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 // ReSharper disable UseMethodAny.1
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Count() >= 1
@@ -34,6 +37,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithCountSubqueryReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 // ReSharper disable UseMethodAny.1
 			var query = (from timesheet in db.Timesheets
 						 where 1 <= timesheet.Entries.Count()
@@ -46,6 +52,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithCountSubqueryComparedToProperty()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Count() > timesheet.Id
 						 select timesheet).ToList();
@@ -56,6 +65,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithCountSubqueryComparedToPropertyReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Id < timesheet.Entries.Count()
 						 select timesheet).ToList();
@@ -66,6 +78,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithAverageSubquery()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Average(e => e.NumberOfHours) > 12
 						 select timesheet).ToList();
@@ -76,6 +91,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithAverageSubqueryReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where 12 < timesheet.Entries.Average(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -87,6 +105,9 @@ namespace NHibernate.Test.Linq
 		[Ignore("Need to coalesce the subquery - timesheet with no entries should return average of 0, not null")]
 		public void TimeSheetsWithAverageSubqueryComparedToProperty()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Average(e => e.NumberOfHours) < timesheet.Id
 						 select timesheet).ToList();
@@ -98,6 +119,9 @@ namespace NHibernate.Test.Linq
 		[Ignore("Need to coalesce the subquery - timesheet with no entries should return average of 0, not null")]
 		public void TimeSheetsWithAverageSubqueryComparedToPropertyReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Id > timesheet.Entries.Average(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -108,6 +132,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMaxSubquery()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Max(e => e.NumberOfHours) == 14
 						 select timesheet).ToList();
@@ -118,6 +145,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMaxSubqueryReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where 14 == timesheet.Entries.Max(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -128,6 +158,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMaxSubqueryComparedToProperty()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Max(e => e.NumberOfHours) > timesheet.Id
 						 select timesheet).ToList();
@@ -138,6 +171,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMaxSubqueryComparedToPropertyReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Id < timesheet.Entries.Max(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -148,6 +184,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMinSubquery()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Min(e => e.NumberOfHours) < 7
 						 select timesheet).ToList();
@@ -158,6 +197,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMinSubqueryReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where 7 > timesheet.Entries.Min(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -168,6 +210,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMinSubqueryComparedToProperty()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Min(e => e.NumberOfHours) > timesheet.Id
 						 select timesheet).ToList();
@@ -178,6 +223,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithMinSubqueryComparedToPropertyReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Id < timesheet.Entries.Min(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -188,6 +236,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithSumSubquery()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Sum(e => e.NumberOfHours) <= 20
 						 select timesheet).ToList();
@@ -198,6 +249,9 @@ namespace NHibernate.Test.Linq
 		[Test]
 		public void TimeSheetsWithSumSubqueryReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where 20 >= timesheet.Entries.Sum(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -209,6 +263,9 @@ namespace NHibernate.Test.Linq
 		[Ignore("Need to coalesce the subquery - timesheet with no entries should return sum of 0, not null")]
 		public void TimeSheetsWithSumSubqueryComparedToProperty()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Entries.Sum(e => e.NumberOfHours) <= timesheet.Id
 						 select timesheet).ToList();
@@ -220,6 +277,9 @@ namespace NHibernate.Test.Linq
 		[Ignore("Need to coalesce the subquery - timesheet with no entries should return sum of 0, not null")]
 		public void TimeSheetsWithSumSubqueryComparedToPropertyReversed()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
 			var query = (from timesheet in db.Timesheets
 						 where timesheet.Id >= timesheet.Entries.Sum(e => e.NumberOfHours)
 						 select timesheet).ToList();
@@ -538,6 +598,12 @@ where c.Order.Customer.CustomerId = 'VINET'
 		[Test(Description = "NH-3111")]
 		public void SubqueryWhereFailingTest()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support subquery in select clause");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			var list = (db.OrderLines
 				.Select(ol => new
 				{
@@ -554,6 +620,12 @@ where c.Order.Customer.CustomerId = 'VINET'
 		[Test(Description = "NH-3111")]
 		public void SubqueryWhereFailingTest2()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support subquery in select clause");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			var list = db.OrderLines
 				.Select(ol => new
 				{
@@ -570,6 +642,12 @@ where c.Order.Customer.CustomerId = 'VINET'
 		[Test(Description = "NH-3111")]
 		public void SubqueryWhereFailingTest3()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support subquery in select clause");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			var list = db.OrderLines
 				.Select(ol => new
 				{
@@ -586,6 +664,12 @@ where c.Order.Customer.CustomerId = 'VINET'
 		[Test(Description = "NH-3190")]
 		public void ProductsWithSubqueryReturningBoolFirstOrDefaultEq()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			var result = (from p in db.Products
 						  where (from c in db.Categories
 								 where c.Name == "Confections"
@@ -598,8 +682,14 @@ where c.Order.Customer.CustomerId = 'VINET'
 		}
 
 		[Test(Description = "NH-3190")]
-		public void CategoriesWithFirstProductIsNotDiscouned()
+		public void SubselectCanHaveBoolResult()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			var result = (from c in db.Categories
 						  where c.Products.OrderBy(p => p.ProductId).Select(p => p.Discontinued).FirstOrDefault() == false
 						  select c).ToList();
@@ -611,6 +701,12 @@ where c.Order.Customer.CustomerId = 'VINET'
 		[Ignore("Not fixed yet.")]
 		public void ProductsWithSubqueryReturningProjectionBoolFirstOrDefaultEq()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			//NH-3190
 			var result = (from p in db.Products
 						  where (from c in db.Categories
@@ -626,6 +722,12 @@ where c.Order.Customer.CustomerId = 'VINET'
 		[Test(Description = "NH-3190")]
 		public void ProductsWithSubqueryReturningStringFirstOrDefaultEq()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore(Dialect.GetType().Name + " does not support scalar sub-queries");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			var result = (from p in db.Products
 						  where (from c in db.Categories
 								 where c.Name == "Confections"
@@ -635,6 +737,46 @@ where c.Order.Customer.CustomerId = 'VINET'
 				.ToList();
 
 			Assert.That(result.Count, Is.EqualTo(13));
+		}
+
+
+		[Test(Description = "NH-3423")]
+		public void NullComparedToNewExpressionInWhereClause()
+		{
+			// Construction will never be equal to null, so the ternary should be collapsed
+			// to just the IfFalse expression. Without this collapsing, we cannot generate HQL.
+
+			var result = db.Products
+				.Select(p => new {Name = p.Name, Pr2 = new {ReorderLevel = p.ReorderLevel}})
+				.Where(pr1 => (pr1.Pr2 == null ? (int?) null : pr1.Pr2.ReorderLevel) > 6)
+				.ToList();
+
+			Assert.That(result.Count, Is.EqualTo(45));
+		}
+
+		private class Pr2
+		{
+			public int ReorderLevel { get; set; }
+		}
+
+		private class Pr1
+		{
+			public string Name { get; set; }
+			public Pr2 Pr2 { get; set; }
+		}
+
+		[Test(Description = "NH-3423")]
+		public void NullComparedToMemberInitExpressionInWhereClause()
+		{
+			// Construction will never be equal to null, so the ternary should be collapsed
+			// to just the IfFalse expression. Without this collapsing, we cannot generate HQL.
+
+			var result = db.Products
+				.Select(p => new Pr1 { Name = p.Name, Pr2 = new Pr2 { ReorderLevel = p.ReorderLevel } })
+				.Where(pr1 => (pr1.Pr2 == null ? (int?)null : pr1.Pr2.ReorderLevel) > 6)
+				.ToList();
+
+			Assert.That(result.Count, Is.EqualTo(45));
 		}
 	}
 }

@@ -1,4 +1,3 @@
-using System;
 using NUnit.Framework;
 
 namespace NHibernate.Test.NHSpecificTest.NH687
@@ -6,9 +5,9 @@ namespace NHibernate.Test.NHSpecificTest.NH687
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
-		public override string BugNumber
+		protected override bool AppliesTo(Dialect.Dialect dialect)
 		{
-			get { return "NH687"; }
+			return TestDialect.SupportsEmptyInsertsOrHasNonIdentityNativeGenerator;
 		}
 
 		[Test]
@@ -32,7 +31,7 @@ namespace NHibernate.Test.NHSpecificTest.NH687
 			try
 			{
 				int child1Id, child2Id;
-				using (ISession session = sessions.OpenSession())
+				using (ISession session = Sfi.OpenSession())
 				{
 					session.Save(foo);
 
@@ -41,7 +40,7 @@ namespace NHibernate.Test.NHSpecificTest.NH687
 					session.Flush();
 				}
 
-				using (ISession session = sessions.OpenSession())
+				using (ISession session = Sfi.OpenSession())
 				{
 					Foo r = session.Get<Foo>(foo.Id);
 					Assert.IsNotNull(r);

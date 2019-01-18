@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NHibernate.Cfg.MappingSchema;
+using NHibernate.Util;
 
 namespace NHibernate.Mapping.ByCode.Impl
 {
-	public class MapKeyManyToManyMapper : IMapKeyManyToManyMapper
+	// 6.0 TODO: remove IColumnsAndFormulasMapper once IMapKeyManyToManyMapper inherits it.
+	public class MapKeyManyToManyMapper : IMapKeyManyToManyMapper, IColumnsAndFormulasMapper
 	{
 		private const string DefaultColumnName = "mapKeyRelation";
 		private readonly HbmMapKeyManyToMany mapping;
@@ -27,6 +29,19 @@ namespace NHibernate.Mapping.ByCode.Impl
 			mapping.foreignkey = foreignKeyName;
 		}
 
+		#endregion
+
+		#region Implementation of IColumnsAndFormulasMapper
+
+		/// <inheritdoc />
+		public void ColumnsAndFormulas(params Action<IColumnOrFormulaMapper>[] columnOrFormulaMapper)
+		{
+			ResetColumnPlainValues();
+
+			mapping.Items = ColumnOrFormulaMapper.GetItemsFor(columnOrFormulaMapper, DefaultColumnName);
+		}
+
+		/// <inheritdoc cref="IColumnsAndFormulasMapper.Formula" />
 		public void Formula(string formula)
 		{
 			if (formula == null)
@@ -36,10 +51,10 @@ namespace NHibernate.Mapping.ByCode.Impl
 
 			ResetColumnPlainValues();
 			mapping.Items = null;
-			string[] formulaLines = formula.Split(new[] {Environment.NewLine}, StringSplitOptions.None);
+			string[] formulaLines = formula.Split(StringHelper.LineSeparators, StringSplitOptions.None);
 			if (formulaLines.Length > 1)
 			{
-				mapping.Items = new[] {new HbmFormula {Text = formulaLines}};
+				mapping.Items = new object[] {new HbmFormula {Text = formulaLines}};
 			}
 			else
 			{
@@ -47,9 +62,23 @@ namespace NHibernate.Mapping.ByCode.Impl
 			}
 		}
 
+		/// <inheritdoc />
+		public void Formulas(params string[] formulas)
+		{
+			if (formulas == null)
+				throw new ArgumentNullException(nameof(formulas));
+
+			ResetColumnPlainValues();
+			mapping.Items =
+				formulas
+					.Select(
+						f => (object) new HbmFormula { Text = f.Split(StringHelper.LineSeparators, StringSplitOptions.None) })
+					.ToArray();
+		}
+
 		#endregion
 
-		#region IMapKeyManyToManyMapper Members
+		#region IColumnsMapper Members
 
 		public void Column(Action<IColumnMapper> columnMapper)
 		{

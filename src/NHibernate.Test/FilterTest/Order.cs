@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 
 namespace NHibernate.Test.FilterTest
 {
@@ -7,11 +7,11 @@ namespace NHibernate.Test.FilterTest
 	{
 		private long id;
 		private String region;
-		private DateTime placementDate;
-		private DateTime fulfillmentDate;
+		private DateTime? placementDate;
+		private DateTime? fulfillmentDate;
 		private Salesperson salesperson;
 		private String buyer;
-		private IList lineItems = new ArrayList();
+		private IList<LineItem> lineItems = new List<LineItem>();
 
 		public virtual long Id
 		{
@@ -25,13 +25,13 @@ namespace NHibernate.Test.FilterTest
 			set { region = value; }
 		}
 
-		public virtual DateTime PlacementDate
+		public virtual DateTime? PlacementDate
 		{
 			get { return placementDate; }
 			set { placementDate = value; }
 		}
 
-		public virtual DateTime FulfillmentDate
+		public virtual DateTime? FulfillmentDate
 		{
 			get { return fulfillmentDate; }
 			set { fulfillmentDate = value; }
@@ -49,7 +49,7 @@ namespace NHibernate.Test.FilterTest
 			set { buyer = value; }
 		}
 
-		public virtual IList LineItems
+		public virtual IList<LineItem> LineItems
 		{
 			get { return lineItems; }
 			set { lineItems = value; }

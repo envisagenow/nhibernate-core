@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using NHibernate.Dialect;
 using NHibernate.DomainModel;
 using NUnit.Framework;
@@ -13,7 +14,7 @@ namespace NHibernate.Test.Legacy
 	[TestFixture]
 	public class SQLLoaderTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get
 			{
@@ -47,7 +48,7 @@ namespace NHibernate.Test.Legacy
 			session.Save(sim, 1L);
 			IQuery q = session.CreateSQLQuery("select {sim.*} from Simple {sim} where {sim}.date_ = ?")
 				.AddEntity("sim", typeof(Simple));
-			q.SetTimestamp(0, sim.Date);
+			q.SetDateTime(0, sim.Date);
 			Assert.AreEqual(1, q.List().Count, "q.List.Count");
 			session.Delete(sim);
 			txn.Commit();
@@ -71,7 +72,7 @@ namespace NHibernate.Test.Legacy
 			IQuery q =
 				session.CreateSQLQuery("select {sim.*} from Simple {sim} where {sim}.date_ = :fred")
 				.AddEntity("sim", typeof(Simple));
-			q.SetTimestamp("fred", sim.Date);
+			q.SetDateTime("fred", sim.Date);
 			Assert.AreEqual(1, q.List().Count, "q.List.Count");
 			session.Delete(sim);
 			txn.Commit();
@@ -148,9 +149,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "NAME";
 			Assignable assn = new Assignable();
 			assn.Id = "i.d.";
-			IList l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> {c};
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();
@@ -176,9 +175,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "NAME";
 			Assignable assn = new Assignable();
 			assn.Id = "i.d.";
-			IList l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> {c};
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();
@@ -187,9 +184,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "NAME2";
 			assn = new Assignable();
 			assn.Id = "i.d.2";
-			l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> { c };
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();
@@ -227,9 +222,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "Good";
 			Assignable assn = new Assignable();
 			assn.Id = "i.d.";
-			IList l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> { c };
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();
@@ -237,9 +230,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "Best";
 			assn = new Assignable();
 			assn.Id = "i.d.2";
-			l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> {c};
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();
@@ -247,9 +238,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "Better";
 			assn = new Assignable();
 			assn.Id = "i.d.7";
-			l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> {c};
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();
@@ -344,8 +333,8 @@ namespace NHibernate.Test.Legacy
 		[Test]
 		public void DoubleAliasing()
 		{
-			if (Dialect is MySQLDialect) return;
-			if (Dialect is FirebirdDialect) return; // See comment below
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore("Dialect does not support scalar sub-select, used by Map formula in B (C1 and C2) mapping");
 
 			ISession session = OpenSession();
 
@@ -375,7 +364,6 @@ namespace NHibernate.Test.Legacy
 			Assert.IsNotNull(list);
 
 			Assert.AreEqual(2, list.Count);
-			// On Firebird the list has 4 elements, I don't understand why.
 
 			session.Delete("from A");
 			session.Flush();
@@ -593,7 +581,8 @@ namespace NHibernate.Test.Legacy
 		[Test]
 		public void FindBySQLDiscriminatedDiffSessions()
 		{
-			if (Dialect is MySQLDialect) return;
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore("Dialect does not support scalar sub-select, used by Map formula in B (C1 and C2) mapping");
 
 			ISession session = OpenSession();
 			A savedA = new A();
@@ -635,9 +624,7 @@ namespace NHibernate.Test.Legacy
 			c.Name = "NAME";
 			Assignable assn = new Assignable();
 			assn.Id = "i.d.";
-			IList l = new ArrayList();
-			l.Add(c);
-			assn.Categories = l;
+			assn.Categories = new List<Category> {c};
 			c.Assignable = assn;
 			s.Save(assn);
 			s.Flush();

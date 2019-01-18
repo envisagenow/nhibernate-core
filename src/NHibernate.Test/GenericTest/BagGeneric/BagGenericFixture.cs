@@ -9,7 +9,7 @@ namespace NHibernate.Test.GenericTest.BagGeneric
 	public class BagGenericFixture : TestCase
 	{
 
-		protected override System.Collections.IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "GenericTest.BagGeneric.BagGenericFixture.hbm.xml" }; }
 		}
@@ -21,7 +21,7 @@ namespace NHibernate.Test.GenericTest.BagGeneric
 
 		protected override void OnTearDown()
 		{
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				s.Delete("from A");
 				s.Flush();

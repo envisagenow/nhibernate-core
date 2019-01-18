@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using NHibernate.DomainModel.NHSpecific;
 using NUnit.Framework;
@@ -8,9 +7,14 @@ namespace NHibernate.Test.NHSpecificTest
 	[TestFixture]
 	public class LazyLoadBugTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] {"NHSpecific.LazyLoadBug.hbm.xml"}; }
+		}
+
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			return TestDialect.SupportsEmptyInsertsOrHasNonIdentityNativeGenerator;
 		}
 
 		[Test]
@@ -84,7 +88,7 @@ namespace NHibernate.Test.NHSpecificTest
 				Assert.AreEqual(1, parent2.ChildrenNoAdd.Count);
 			}
 
-			using (ISession session = sessions.OpenSession())
+			using (ISession session = Sfi.OpenSession())
 			{
 				session.Delete("from LLParent");
 				session.Flush();

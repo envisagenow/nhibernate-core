@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using NHibernate.Bytecode;
 using NHibernate.Properties;
 using NUnit.Framework;
-using SharpTestsEx;
 using Environment = NHibernate.Cfg.Environment;
 
 namespace NHibernate.Test.CfgTest
 {
+	[TestFixture]
 	public class CustomBytecodeProviderTest
 	{
 		private class MyByteCodeProvider : AbstractBytecodeProvider
@@ -34,29 +34,29 @@ namespace NHibernate.Test.CfgTest
 		public void WhenNoShortCutUsedThenCanBuildBytecodeProvider()
 		{
 			var properties = new Dictionary<string, string> { { Environment.PropertyBytecodeProvider, typeof(MyByteCodeProvider).AssemblyQualifiedName } };
-			Executing.This(() => Environment.BuildBytecodeProvider(properties)).Should().NotThrow();
+			Assert.That(() => Environment.BuildBytecodeProvider(properties), Throws.Nothing);
 		}
 
 		[Test]
 		public void WhenNoShortCutUsedThenCanBuildInstanceOfConfiguredBytecodeProvider()
 		{
 			var properties = new Dictionary<string, string> { { Environment.PropertyBytecodeProvider, typeof(MyByteCodeProvider).AssemblyQualifiedName } };
-			Environment.BuildBytecodeProvider(properties).Should().Be.InstanceOf<MyByteCodeProvider>();
+			Assert.That(Environment.BuildBytecodeProvider(properties), Is.InstanceOf<MyByteCodeProvider>());
 		}
 
 		[Test]
 		public void WhenInvalidThenThrow()
 		{
 			var properties = new Dictionary<string, string> { { Environment.PropertyBytecodeProvider, typeof(InvalidByteCodeProvider).AssemblyQualifiedName } };
-			Executing.This(() => Environment.BuildBytecodeProvider(properties)).Should().Throw<HibernateByteCodeException>();
+			Assert.That(() => Environment.BuildBytecodeProvider(properties), Throws.TypeOf<HibernateByteCodeException>());
 		}
 
 		[Test]
 		public void WhenNoDefaultCtorThenThrow()
 		{
 			var properties = new Dictionary<string, string> { { Environment.PropertyBytecodeProvider, typeof(InvalidNoCtorByteCodeProvider).AssemblyQualifiedName } };
-			Executing.This(() => Environment.BuildBytecodeProvider(properties)).Should().Throw<HibernateByteCodeException>()
-				.And.Exception.InnerException.Message.Should().Contain("constructor was not found");
+			Assert.That(() => Environment.BuildBytecodeProvider(properties), Throws.TypeOf<HibernateByteCodeException>()
+																				   .And.InnerException.Message.Contains("constructor was not found"));
 		}
 	}
 }

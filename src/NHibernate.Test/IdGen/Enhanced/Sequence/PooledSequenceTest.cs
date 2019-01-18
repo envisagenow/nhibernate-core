@@ -7,7 +7,7 @@ namespace NHibernate.Test.IdGen.Enhanced.Sequence
 	[TestFixture]
 	public class PooledSequenceTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "IdGen.Enhanced.Sequence.Pooled.hbm.xml" }; }
 		}
@@ -20,7 +20,7 @@ namespace NHibernate.Test.IdGen.Enhanced.Sequence
 		[Test]
 		public void TestNormalBoundary()
 		{
-			var persister = sessions.GetEntityPersister(typeof(Entity).FullName);
+			var persister = Sfi.GetEntityPersister(typeof(Entity).FullName);
 			Assert.That(persister.IdentifierGenerator, Is.TypeOf<SequenceStyleGenerator>());
 
 			var generator = (SequenceStyleGenerator)persister.IdentifierGenerator;

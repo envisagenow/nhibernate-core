@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections;
 using NHibernate.Criterion;
 using NHibernate.Engine.Query;
@@ -12,9 +13,16 @@ namespace NHibernate.Test.Hql.Ast
 	[TestFixture]
 	public class HqlFixture : BaseFixture
 	{
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			// Some classes are mapped with table joins, which requires temporary tables for DML to work,
+			// and DML is used for the cleanup.
+			return Dialect.SupportsTemporaryTables;
+		}
+
 		protected HQLQueryPlan CreateQueryPlan(string hql, bool scalar)
 		{
-			return new QueryExpressionPlan(new StringQueryExpression(hql), scalar, new CollectionHelper.EmptyMapClass<string, IFilter>(), sessions);
+			return new QueryExpressionPlan(new StringQueryExpression(hql), scalar, CollectionHelper.EmptyDictionary<string, IFilter>(), Sfi);
 		}
 
 		protected HQLQueryPlan CreateQueryPlan(string hql)
@@ -299,16 +307,37 @@ namespace NHibernate.Test.Hql.Ast
 					s.Save(new Animal() {Description = "cat3", BodyWeight = 2.7f});
 
 					// act
-					s.CreateQuery("insert into Animal (description, bodyWeight) select a.description, :weight from Animal a")
+					s.CreateQuery("insert into Animal (description, bodyWeight) select a.description, :weight from Animal a where a.bodyWeight < :weight")
 						.SetParameter<float>("weight", 5.7f).ExecuteUpdate();
 
 					// assert
 					Assert.AreEqual(3, s.CreateCriteria<Animal>().SetProjection(Projections.RowCount())
-										.Add(Restrictions.Eq("bodyWeight", 5.7f)).UniqueResult<int>());
+					                    .Add(Restrictions.Gt("bodyWeight", 5.5f)).UniqueResult<int>());
 
 					s.CreateQuery("delete from Animal").ExecuteUpdate();
 					s.Transaction.Commit();
 				}
+			}
+		}
+
+
+		[Test]
+		public void UnaryMinusBeforeParenthesesHandledCorrectly()
+		{
+			using (ISession s = OpenSession())
+			using (ITransaction txn = s.BeginTransaction())
+			{
+				s.Save(new Animal {Description = "cat1", BodyWeight = 1});
+
+				// NH-2290: Unary minus before parentheses wasn't handled correctly (this query returned 0).
+				int actual = s.CreateQuery("select -(1+1) from Animal as h")
+					.List<int>().Single();
+				Assert.That(actual, Is.EqualTo(-2));
+
+				// This was the workaround, which of course should still work.
+				int actualWorkaround = s.CreateQuery("select -1*(1+1) from Animal as h")
+					.List<int>().Single();
+				Assert.That(actualWorkaround, Is.EqualTo(-2));
 			}
 		}
 	}

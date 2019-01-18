@@ -9,7 +9,7 @@ namespace NHibernate.Tuple.Component
 	[Serializable]
 	public abstract class AbstractComponentTuplizer : IComponentTuplizer
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(AbstractComponentTuplizer));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(AbstractComponentTuplizer));
 
 		protected internal int propertySpan;
 		protected internal IGetter[] getters;
@@ -33,12 +33,12 @@ namespace NHibernate.Tuple.Component
 				{
 					foundCustomAccessor = true;
 				}
-				i++;				
+				i++;
 			}
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
-				log.DebugFormat("{0} accessors found for component: {1}", foundCustomAccessor ? "Custom" : "No custom",
-				                component.ComponentClassName);
+				log.Debug("{0} accessors found for component: {1}", foundCustomAccessor ? "Custom" : "No custom",
+								component.ComponentClassName);
 			}
 			hasCustomAccessors = foundCustomAccessor;
 
@@ -53,7 +53,8 @@ namespace NHibernate.Tuple.Component
 				propTypes[j] = getters[j].ReturnType;
 			}
 
-			instantiator = BuildInstantiator(component);
+			// Fix for NH-3119
+			//instantiator = BuildInstantiator(component);
 		}
 
 		#region IComponentTuplizer Members
@@ -68,7 +69,7 @@ namespace NHibernate.Tuple.Component
 			throw new NotSupportedException();
 		}
 
-		public virtual bool HasParentProperty 
+		public virtual bool HasParentProperty
 		{
 			get { return false; }
 		}
@@ -100,7 +101,8 @@ namespace NHibernate.Tuple.Component
 
 		public virtual object GetPropertyValue(object component, int i)
 		{
-			return getters[i].Get(component);
+			// NH Different behavior : for NH-1101
+			return component == null ? null : getters[i].Get(component);
 		}
 
 		/// <summary> This method does not populate the component parent</summary>

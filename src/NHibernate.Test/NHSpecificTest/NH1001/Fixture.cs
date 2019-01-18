@@ -7,11 +7,6 @@ namespace NHibernate.Test.NHSpecificTest.NH1001
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
-		public override string BugNumber
-		{
-			get { return "NH1001"; }
-		}
-
 		protected override void Configure(Configuration configuration)
 		{
 			cfg.SetProperty(Environment.GenerateStatistics, "true");
@@ -47,7 +42,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1001
 
 			ExecuteStatement(string.Format("UPDATE EMPLOYEES SET DEPARTMENT_ID = 99999 WHERE EMPLOYEE_ID = {0}", employeeId));
 
-			IStatistics stat = sessions.Statistics;
+			IStatistics stat = Sfi.Statistics;
 			stat.Clear();
 			using (ISession sess = OpenSession())
 			using (ITransaction tx = sess.BeginTransaction())

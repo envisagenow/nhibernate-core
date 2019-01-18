@@ -1,5 +1,7 @@
 using System;
 using NHibernate.Bytecode;
+using NHibernate.Bytecode.Lightweight;
+using NHibernate.Intercept;
 using NHibernate.Properties;
 
 namespace NHibernate.Tuple.Component
@@ -17,14 +19,27 @@ namespace NHibernate.Tuple.Component
 		private readonly IGetter parentGetter;
 		[NonSerialized]
 		private IReflectionOptimizer optimizer;
+		[NonSerialized]
+		private bool isBytecodeProviderImpl; // 6.0 TODO: remove
 
 
 		[OnDeserialized]
 		internal void OnDeserialized(StreamingContext context)
 		{
-			this.optimizer = Cfg.Environment.BytecodeProvider.GetReflectionOptimizer(componentClass, getters, setters);
+			SetReflectionOptimizer();
+
+			if (optimizer != null)
+			{
+				// Fix for NH-3119:
+				// Also set the InstantiationOptimizer on the deserialized PocoInstantiator.
+				((PocoInstantiator)instantiator).SetOptimizer(optimizer.InstantiationOptimizer);
+			}
+
+			ClearOptimizerWhenUsingCustomAccessors();
 		}
-		public PocoComponentTuplizer(Mapping.Component component) : base(component)
+
+		public PocoComponentTuplizer(Mapping.Component component)
+			: base(component)
 		{
 			componentClass = component.ComponentClass;
 
@@ -40,14 +55,12 @@ namespace NHibernate.Tuple.Component
 				parentGetter = parentProperty.GetGetter(componentClass);
 			}
 
-			if (hasCustomAccessors || !Cfg.Environment.UseReflectionOptimizer)
-			{
-				optimizer = null;
-			}
-			else
-			{
-				optimizer = Cfg.Environment.BytecodeProvider.GetReflectionOptimizer(componentClass, getters, setters);
-			}
+			SetReflectionOptimizer();
+
+			// Fix for NH-3119
+			instantiator = BuildInstantiator(component);
+
+			ClearOptimizerWhenUsingCustomAccessors();
 		}
 
 		public override System.Type MappedClass
@@ -58,7 +71,7 @@ namespace NHibernate.Tuple.Component
 		public override object[] GetPropertyValues(object component)
 		{
 			// NH Different behavior : for NH-1101
-			if (Equals(BackrefPropertyAccessor.Unknown, component) || component == null)
+			if (Equals(BackrefPropertyAccessor.Unknown, component) || Equals(LazyPropertyInitializer.UnfetchedProperty, component) || component == null)
 			{
 				return new object[propertySpan];
 			}
@@ -85,13 +98,36 @@ namespace NHibernate.Tuple.Component
 			}
 		}
 
+		public override object GetPropertyValue(object component, int i)
+		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				return component == null
+					? null
+					: optimizer.AccessOptimizer.GetPropertyValue(component, i);
+			}
+
+			return base.GetPropertyValue(component, i);
+		}
+
 		public override object GetParent(object component)
 		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				return optimizer.AccessOptimizer.GetSpecializedPropertyValue(component);
+			}
+
 			return parentGetter.Get(component);
 		}
 
 		public override void SetParent(object component, object parent, Engine.ISessionFactoryImplementor factory)
 		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				optimizer.AccessOptimizer.SetSpecializedPropertyValue(component, parent);
+				return;
+			}
+
 			parentSetter.Set(component, parent);
 		}
 
@@ -126,6 +162,23 @@ namespace NHibernate.Tuple.Component
 		protected internal override ISetter BuildSetter(Mapping.Component component, Mapping.Property prop)
 		{
 			return prop.GetSetter(component.ComponentClass);
+		}
+
+		protected void SetReflectionOptimizer()
+		{
+			if (Cfg.Environment.UseReflectionOptimizer)
+			{
+				optimizer = Cfg.Environment.BytecodeProvider.GetReflectionOptimizer(componentClass, getters, setters, parentGetter, parentSetter);
+				isBytecodeProviderImpl = Cfg.Environment.BytecodeProvider is BytecodeProviderImpl;
+			}
+		}
+
+		protected void ClearOptimizerWhenUsingCustomAccessors()
+		{
+			if (hasCustomAccessors)
+			{
+				optimizer = null;
+			}
 		}
 	}
 }

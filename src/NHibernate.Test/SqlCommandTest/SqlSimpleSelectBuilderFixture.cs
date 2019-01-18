@@ -9,7 +9,7 @@ using NUnit.Framework;
 namespace NHibernate.Test.SqlCommandTest
 {
 	/// <summary>
-	/// Tests all of the functionallity of the SqlInsertBulder
+	/// Tests all of the functionality of the SqlInsertBulder
 	/// </summary>
 	[TestFixture]
 	public class SqlSimpleSelectBuilderFixture
@@ -48,8 +48,8 @@ namespace NHibernate.Test.SqlCommandTest
 				.Append("FROM test_simple_select_builder ")
 				.Append("WHERE identity_column = ? AND version_column = ?")
 				.Append(" AND where_frag_column = ?")
+				.Append(factoryImpl.Dialect.GetForUpdateString(LockMode.Read))
 				.ToString();
-
 
 			Assert.AreEqual(expectedSql, sqlString.ToString(), "SQL String");
 			Assert.AreEqual(3, sqlString.GetParameterCount(), "3 parameters");

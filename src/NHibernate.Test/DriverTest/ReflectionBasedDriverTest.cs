@@ -1,10 +1,10 @@
 using System;
 using NHibernate.Driver;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.DriverTest
 {
+	[TestFixture]
 	public class ReflectionBasedDriverTest
 	{
 		private class MyDriverWithWrongClassesAndGoodDbProviderFactory : ReflectionBasedDriver
@@ -33,13 +33,20 @@ namespace NHibernate.Test.DriverTest
 				get { throw new NotImplementedException(); }
 			}
 		}
+		
 		private class MyDriverWithNoDbProviderFactory : ReflectionBasedDriver
 		{
-			public MyDriverWithNoDbProviderFactory():
-			base(null,
-				"System.Data.OracleClient, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089", 
-			"System.Data.OracleClient.OracleConnection", 
-			"System.Data.OracleClient.OracleCommand") { }
+			public MyDriverWithNoDbProviderFactory() : base(
+				null,
+#if NETFX
+				"System.Data.OracleClient, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089",
+#else
+				"System.Data.OracleClient",				
+#endif
+				"System.Data.OracleClient.OracleConnection",
+				"System.Data.OracleClient.OracleCommand")
+			{
+			}
 
 			public override bool UseNamedPrefixInSql
 			{
@@ -57,16 +64,17 @@ namespace NHibernate.Test.DriverTest
 			}
 		}
 
+#if NETFX
 		[Test]
 		public void WhenCreatedWithGoodDbProviderThenNotThrows()
 		{
-			Executing.This(()=> new MyDriverWithWrongClassesAndGoodDbProviderFactory()).Should().NotThrow();
+			Assert.That(() => new MyDriverWithWrongClassesAndGoodDbProviderFactory(), Throws.Nothing);
 		}
 
 		[Test]
 		public void WhenCreatedWithNullAssemblyAndGoodDbProviderThenNotThrows()
 		{
-			Executing.This(() => new MyDriverWithWrongClassesAndGoodDbProviderFactory(null)).Should().NotThrow();
+			Assert.That(() => new MyDriverWithWrongClassesAndGoodDbProviderFactory(null), Throws.Nothing);
 		}
 
 		[Test]
@@ -75,7 +83,7 @@ namespace NHibernate.Test.DriverTest
 			var provider = new MyDriverWithWrongClassesAndGoodDbProviderFactory();
 			using (var connection = provider.CreateConnection())
 			{
-				connection.Should().Not.Be.Null();
+				Assert.That(connection, Is.Not.Null);
 			}
 		}
 
@@ -85,14 +93,15 @@ namespace NHibernate.Test.DriverTest
 			var provider = new MyDriverWithWrongClassesAndGoodDbProviderFactory();
 			using (var command = provider.CreateCommand())
 			{
-				command.Should().Not.Be.Null();
+				Assert.That(command, Is.Not.Null);
 			}
 		}
+#endif
 
 		[Test]
 		public void WhenCreatedWithNoDbProviderThenNotThrows()
 		{
-			Executing.This(() => new MyDriverWithNoDbProviderFactory()).Should().NotThrow();
+			Assert.That(() => new MyDriverWithNoDbProviderFactory(), Throws.Nothing);
 		}
 
 		[Test]
@@ -101,7 +110,7 @@ namespace NHibernate.Test.DriverTest
 			var provider = new MyDriverWithNoDbProviderFactory();
 			using (var connection = provider.CreateConnection())
 			{
-				connection.Should().Not.Be.Null();
+				Assert.That(connection, Is.Not.Null);
 			}
 		}
 
@@ -111,7 +120,7 @@ namespace NHibernate.Test.DriverTest
 			var provider = new MyDriverWithNoDbProviderFactory();
 			using (var command = provider.CreateCommand())
 			{
-				command.Should().Not.Be.Null();
+				Assert.That(command, Is.Not.Null);
 			}
 		}
 	}

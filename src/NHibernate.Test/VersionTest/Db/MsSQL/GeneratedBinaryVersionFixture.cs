@@ -9,7 +9,7 @@ namespace NHibernate.Test.VersionTest.Db.MsSQL
 	[TestFixture]
 	public class GeneratedBinaryVersionFixture : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "VersionTest.Db.MsSQL.SimpleVersioned.hbm.xml" }; }
 		}
@@ -86,12 +86,12 @@ namespace NHibernate.Test.VersionTest.Db.MsSQL
 
 			try
 			{
-				using (ISession session = OpenSession())
+				using (var session = OpenSession())
 				{
 					session.Save(versioned);
 					session.Flush();
 
-					using (ISession concurrentSession = OpenSession())
+					using (var concurrentSession = OpenSession())
 					{
 						var sameVersioned = concurrentSession.Get<SimpleVersioned>(versioned.Id);
 						sameVersioned.Something = "another string";
@@ -99,13 +99,13 @@ namespace NHibernate.Test.VersionTest.Db.MsSQL
 					}
 
 					versioned.Something = "new string";
-					session.Flush();
+
+					var expectedException = Sfi.Settings.IsBatchVersionedDataEnabled
+						? Throws.InstanceOf<StaleStateException>()
+						: Throws.InstanceOf<StaleObjectStateException>();
+
+					Assert.That(() => session.Flush(), expectedException);
 				}
-				Assert.Fail("Expected exception was not thrown");
-			}
-			catch (StaleObjectStateException)
-			{
-				// as expected
 			}
 			finally
 			{

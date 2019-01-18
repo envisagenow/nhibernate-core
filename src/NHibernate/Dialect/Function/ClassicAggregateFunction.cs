@@ -31,7 +31,7 @@ namespace NHibernate.Dialect.Function
 		/// </summary>
 		/// <param name="name">SQL function name.</param>
 		/// <param name="acceptAsterisk">True if accept asterisk like argument</param>
-		/// <param name="typeValue">Return type for the fuction.</param>
+		/// <param name="typeValue">Return type for the function.</param>
 		public ClassicAggregateFunction(string name, bool acceptAsterisk, IType typeValue)
 			: this(name, acceptAsterisk)
 		{
@@ -77,8 +77,8 @@ namespace NHibernate.Dialect.Function
 			if (args.Count > 1)
 			{
 				object firstArg = args[0];
-				if (!StringHelper.EqualsCaseInsensitive("distinct", firstArg.ToString()) &&
-				    !StringHelper.EqualsCaseInsensitive("all", firstArg.ToString()))
+				if (!"distinct".Equals(firstArg.ToString(), StringComparison.OrdinalIgnoreCase) &&
+				    !"all".Equals(firstArg.ToString(), StringComparison.OrdinalIgnoreCase))
 				{
 					throw new QueryException(string.Format("Aggregate {0}(): token unknow {1}.", name, firstArg));
 				}
@@ -106,8 +106,8 @@ namespace NHibernate.Dialect.Function
 
 		bool IFunctionGrammar.IsKnownArgument(string token)
 		{
-			return "distinct".Equals(token.ToLowerInvariant()) ||
-				"all".Equals(token.ToLowerInvariant());
+			return "distinct".Equals(token, StringComparison.OrdinalIgnoreCase) ||
+				"all".Equals(token, StringComparison.OrdinalIgnoreCase);
 		}
 
 		#endregion

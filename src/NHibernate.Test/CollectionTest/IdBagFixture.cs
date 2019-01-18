@@ -1,6 +1,6 @@
 using System;
 using System.Collections;
-
+using System.Collections.Generic;
 using NUnit.Framework;
 
 namespace NHibernate.Test.CollectionTest
@@ -8,7 +8,7 @@ namespace NHibernate.Test.CollectionTest
 	[TestFixture]
 	public class IdBagFixture : TestCase
 	{
-		protected override System.Collections.IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "CollectionTest.IdBagFixture.hbm.xml" }; }
 		}
@@ -20,7 +20,7 @@ namespace NHibernate.Test.CollectionTest
 
 		protected override void OnTearDown()
 		{
-			using( ISession s = sessions.OpenSession() )
+			using( ISession s = Sfi.OpenSession() )
 			{
 				s.Delete( "from A" );
 				s.Flush();
@@ -32,7 +32,7 @@ namespace NHibernate.Test.CollectionTest
 		{
 			A a = new A();
 			a.Name = "first generic type";
-			a.Items = new ArrayList();
+			a.Items = new List<string>();
 			a.Items.Add( "first string" );
 			a.Items.Add( "second string" );
 

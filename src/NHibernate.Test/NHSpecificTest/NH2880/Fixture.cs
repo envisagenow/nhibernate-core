@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
+using NHibernate.Util;
 using NUnit.Framework;
 
 namespace NHibernate.Test.NHSpecificTest.NH2880
@@ -12,7 +13,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2880
 
 		protected override void OnSetUp()
 		{
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				using (ITransaction t = s.BeginTransaction())
 				{
@@ -36,7 +37,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2880
 		{
 			MemoryStream sessionMemoryStream;
 
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				using (ITransaction t = s.BeginTransaction())
 				{
@@ -45,12 +46,22 @@ namespace NHibernate.Test.NHSpecificTest.NH2880
 				}
 
 				sessionMemoryStream = new MemoryStream();
-				BinaryFormatter writer = new BinaryFormatter();
+				var writer = new BinaryFormatter
+				{
+#if !NETFX
+					SurrogateSelector = new SerializationHelper.SurrogateSelector()
+#endif
+				};
 				writer.Serialize(sessionMemoryStream, s);
 			}
 
 			sessionMemoryStream.Seek(0, SeekOrigin.Begin);
-			BinaryFormatter reader = new BinaryFormatter();
+			var reader = new BinaryFormatter
+			{
+#if !NETFX
+				SurrogateSelector = new SerializationHelper.SurrogateSelector()
+#endif
+			};
 			ISession restoredSession = (ISession)reader.Deserialize(sessionMemoryStream);
 
 			Entity1 e1 = restoredSession.Get<Entity1>(_id);
@@ -66,17 +77,27 @@ namespace NHibernate.Test.NHSpecificTest.NH2880
 		{
 			MemoryStream sessionMemoryStream;
 
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				s.EnableFilter("myFilter");
 
 				sessionMemoryStream = new MemoryStream();
-				BinaryFormatter writer = new BinaryFormatter();
+				var writer = new BinaryFormatter
+				{
+#if !NETFX
+					SurrogateSelector = new SerializationHelper.SurrogateSelector()
+#endif
+				};
 				writer.Serialize(sessionMemoryStream, s);
 			}
 
 			sessionMemoryStream.Seek(0, SeekOrigin.Begin);
-			BinaryFormatter reader = new BinaryFormatter();
+			var reader = new BinaryFormatter
+			{
+#if !NETFX
+				SurrogateSelector = new SerializationHelper.SurrogateSelector()
+#endif
+			};
 			ISession restoredSession = (ISession)reader.Deserialize(sessionMemoryStream);
 
 			Assert.IsNotNull(restoredSession.GetEnabledFilter("myFilter").FilterDefinition);
@@ -86,7 +107,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2880
 
 		protected override void OnTearDown()
 		{
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				using (ITransaction t = s.BeginTransaction())
 				{

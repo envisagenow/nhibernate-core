@@ -12,9 +12,10 @@ namespace NHibernate.Test.MappingByCode.IntegrationTests.NH2825
 	/// See <see cref="FixtureByCode"/> for the by-code mapped version. This class
 	/// demonstrates the equivalent XML mapping.
 	/// </remarks>
+	[TestFixture]
 	public class Fixture : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "MappingByCode.IntegrationTests.NH2825.Mappings.hbm.xml" }; }
 		}

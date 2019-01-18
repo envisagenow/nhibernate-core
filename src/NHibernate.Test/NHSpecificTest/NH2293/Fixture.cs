@@ -1,26 +1,21 @@
 using System.Linq;
 using NHibernate.Hql.Ast.ANTLR;
+using NHibernate.Mapping;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH2293
 {
-	public class Fixture : BugTestCase
+	[TestFixture]
+	public class Fixture : TestCase
 	{
-		protected override System.Collections.IList Mappings
-		{
-			get
-			{
-				return Enumerable.Empty<object>().ToList();
-			}
-		}
+		protected override string[] Mappings => System.Array.Empty<string>();
 
 		[Test]
 		public void WhenQueryHasJustAfromThenThrowQuerySyntaxException()
 		{
-			using (ISession session = OpenSession())
+			using (var session = OpenSession())
 			{
-				session.Executing(s => s.CreateQuery("from").List()).Throws<QuerySyntaxException>();
+				Assert.That(() => session.CreateQuery("from").List(), Throws.TypeOf<QuerySyntaxException>());
 			}
 		}
 	}

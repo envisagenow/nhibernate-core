@@ -60,6 +60,9 @@ namespace NHibernate.Test.Linq.ByMethod
 		[Test]
 		public void OrderByCalculatedAggregatedSubselectProperty()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			//NH-2781
 			var result = db.Orders
 				.Select(o => new
@@ -78,6 +81,9 @@ namespace NHibernate.Test.Linq.ByMethod
 		[Test]
 		public void AggregateAscendingOrderByClause()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			var query = from c in db.Customers
 						orderby c.Orders.Count
 						select c;
@@ -91,6 +97,9 @@ namespace NHibernate.Test.Linq.ByMethod
 		[Test]
 		public void AggregateDescendingOrderByClause()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			var query = from c in db.Customers
 						orderby c.Orders.Count descending
 						select c;
@@ -167,6 +176,12 @@ namespace NHibernate.Test.Linq.ByMethod
 		[Test]
 		public void OrderByWithSelfReferencedSubquery1()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore("Dialect does not support scalar sub-selects");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			if (Dialect is Oracle8iDialect)
 				Assert.Ignore("On Oracle this generates a correlated subquery two levels deep which isn't supported until Oracle 10g.");
 
@@ -182,6 +197,12 @@ namespace NHibernate.Test.Linq.ByMethod
 		[Test]
 		public void OrderByWithSelfReferencedSubquery2()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore("Dialect does not support scalar sub-selects");
+
+			if (!TestDialect.SupportsOrderByAndLimitInSubQueries)
+				Assert.Ignore("Dialect does not support sub-selects with order by or limit/top");
+
 			if (Dialect is Oracle8iDialect)
 				Assert.Ignore("On Oracle this generates a correlated subquery two levels deep which isn't supported until Oracle 10g.");
 
@@ -202,6 +223,26 @@ namespace NHibernate.Test.Linq.ByMethod
 		public void OrderByNullCompareAndSkipAndTake()
 		{
 			db.Orders.OrderBy(o => o.Shipper == null ? 0 : o.Shipper.ShipperId).Skip(3).Take(4).ToList();
+		}
+
+		[Test(Description = "NH-3445"), KnownBug("NH-3445")]
+		public void OrderByWithSelectDistinctAndTake()
+		{
+			db.Orders.Select(o => o.ShippedTo).Distinct().OrderBy(o => o).Take(1000).ToList();
+		}
+		
+		[Test]
+		public void BooleanOrderByDescendingClause()
+		{
+			var query = from c in db.Customers
+			            orderby c.Address.Country == "Belgium" descending, c.Address.Country
+			            select c;
+
+			var customers = query.ToList();
+			if (customers.Count > 1)
+			{
+				Assert.That(customers[0].Address.Country, Is.EqualTo("Belgium"));
+			}
 		}
 	}
 }

@@ -62,13 +62,14 @@ namespace NHibernate.Loader
 			// so be careful about how you formulate your queries in this case
 			if (bagCount > 1)
 			{
-				throw new QueryException("Cannot simultaneously fetch multiple bags.");
+				throw new QueryException($"Cannot simultaneously fetch multiple bags: {this}");
 			}
 		}
 
 		private static bool IsBag(ICollectionPersister collectionPersister)
 		{
-			return collectionPersister.CollectionType is BagType;
+			var type = collectionPersister.CollectionType.GetType();
+			return type.IsGenericType && type.GetGenericTypeDefinition() == typeof (GenericBagType<>);
 		}
 
 		/// <summary>
@@ -92,10 +93,15 @@ namespace NHibernate.Loader
 
 			for (int i = 0; i < length; i++)
 			{
-				suffixes[i] = (i + seed).ToString() + StringHelper.Underscore;
+				suffixes[i] = GenerateSuffix(i + seed);
 			}
 
 			return suffixes;
+		}
+
+		public static string GenerateSuffix(int index)
+		{
+			return index.ToString() + StringHelper.Underscore;
 		}
 	}
 }

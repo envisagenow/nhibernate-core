@@ -8,8 +8,10 @@ using NHibernate.Util;
 
 namespace NHibernate.Proxy.Poco
 {
+	// Obsolete since v5.2
 	/// <summary> Lazy initializer for POCOs</summary>
 	[Serializable]
+	[Obsolete("DynamicProxy has been obsoleted, use static proxies instead (see StaticProxyFactory)")]
 	public abstract class BasicLazyInitializer : AbstractLazyInitializer
 	{
 		private static readonly IEqualityComparer IdentityEqualityComparer = new IdentityEqualityComparer();
@@ -22,14 +24,14 @@ namespace NHibernate.Proxy.Poco
 
 		protected internal BasicLazyInitializer(string entityName, System.Type persistentClass, object id, 
 			MethodInfo getIdentifierMethod, MethodInfo setIdentifierMethod, 
-			IAbstractComponentType componentIdType, ISessionImplementor session)
+			IAbstractComponentType componentIdType, ISessionImplementor session, bool overridesEquals)
 			: base(entityName, id, session)
 		{
 			this.persistentClass = persistentClass;
 			this.getIdentifierMethod = getIdentifierMethod;
 			this.setIdentifierMethod = setIdentifierMethod;
 			this.componentIdType = componentIdType;
-			overridesEquals = ReflectHelper.OverridesEquals(persistentClass);
+			this.overridesEquals = overridesEquals;
 		}
 
 		/// <summary>
@@ -73,7 +75,7 @@ namespace NHibernate.Proxy.Poco
 				{
 					return IdentityEqualityComparer.GetHashCode(proxy);
 				}
-				else if (IsUninitialized && IsEqualToIdentifierMethod(method))
+				else if (IsEqualToIdentifierMethod(method))
 				{
 					return Identifier;
 				}

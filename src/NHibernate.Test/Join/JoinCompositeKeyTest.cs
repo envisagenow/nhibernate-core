@@ -2,7 +2,6 @@ using log4net;
 using NUnit.Framework;
 using System;
 using System.Collections;
-using System.Data;
 
 namespace NHibernate.Test.Join
 {
@@ -16,7 +15,7 @@ namespace NHibernate.Test.Join
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get
 			{

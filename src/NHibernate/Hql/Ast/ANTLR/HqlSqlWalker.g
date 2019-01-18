@@ -2,7 +2,7 @@ tree grammar HqlSqlWalker;
 
 options
 {
-	language=CSharp2;
+	language=CSharp3;
 	output=AST;
 	tokenVocab=Hql;
 	ASTLabelType=IASTNode;
@@ -26,22 +26,28 @@ tokens
 	METHOD_NAME;    // An IDENT that is a method name.
 	NAMED_PARAM;    // A named parameter (:foo).
 	BOGUS;          // Used for error state detection, etc.
+	RESULT_VARIABLE_REF;   // An IDENT that refers to result variable
+	                       // (i.e, an alias for a select expression) 
 }
 
 @namespace { NHibernate.Hql.Ast.ANTLR }
 
 @header
 {
+using System;
 using System.Text;
 using NHibernate.Hql.Ast.ANTLR.Tree;
 }
 
 // The main statement rule.
-statement
+public statement
 	: selectStatement | updateStatement | deleteStatement | insertStatement
 	;
 
 selectStatement
+	@init {
+		PrepareFilterParameter();
+	}
 	: query
 	;
 
@@ -86,6 +92,7 @@ intoClause!
 	}
 	: ^( INTO { HandleClauseStart( INTO ); } (p=path) ps=insertablePropertySpec ) 
 	;
+	finally {HandleClauseEnd( INTO );}
 
 insertablePropertySpec
 	: ^( RANGE (IDENT)+ )
@@ -94,6 +101,7 @@ insertablePropertySpec
 setClause
 	: ^( SET { HandleClauseStart( SET ); } (assignment)* )
 	;
+	finally {HandleClauseEnd( SET );}
 
 assignment
 	@after {
@@ -117,11 +125,16 @@ query
 // The query / subquery rule. Pops the current 'from node' context 
 // (list of aliases).
 unionedQuery!
+	@init{
+		bool oldInSelect = _inSelect;
+		_inSelect = false;
+	}
 	@after {
 		// Antlr note: #x_in refers to the input AST, #x refers to the output AST
 		BeforeStatementCompletion( "select" );
 		ProcessQuery( $s.tree, $unionedQuery.tree );
 		AfterStatementCompletion( "select" );
+		_inSelect = oldInSelect;
 	}
 	: ^( QUERY { BeforeStatement( "select", SELECT ); }
 			// The first phase places the FROM first to make processing the SELECT simpler.
@@ -140,11 +153,26 @@ unionedQuery!
 	;
 
 orderClause
-	: ^(ORDER { HandleClauseStart( ORDER ); } (orderExprs | query (ASCENDING | DESCENDING)? ))
+	: ^(ORDER { HandleClauseStart( ORDER ); } (orderExprs))
 	;
+	finally {HandleClauseEnd( ORDER );}
 
 orderExprs
-	: expr ( ASCENDING | DESCENDING )? (orderExprs)?
+	: orderExpr ( ASCENDING | DESCENDING )? (orderExprs)?
+	;
+
+orderExpr
+	: { IsOrderExpressionResultVariableRef( (IASTNode) input.LT(1) ) }? resultVariableRef
+	| expr
+	| query
+	;
+
+resultVariableRef!
+	@after {
+		HandleResultVariableRef( $resultVariableRef.tree );
+	}
+	: i=identifier
+	-> ^(RESULT_VARIABLE_REF [$i.tree.Text]) 
 	;
 
 skipClause
@@ -158,6 +186,7 @@ takeClause
 groupClause
 	: ^(GROUP { HandleClauseStart( GROUP ); } (expr)+ )
 	;
+	finally {HandleClauseEnd( GROUP );}
 
 havingClause
 	: ^(HAVING logicalExpr)
@@ -167,13 +196,13 @@ selectClause!
 	: ^(SELECT { HandleClauseStart( SELECT ); BeforeSelectClause(); } (d=DISTINCT)? x=selectExprList ) 
 	-> ^(SELECT_CLAUSE["{select clause}"] $d? $x)
 	;
+	finally {HandleClauseEnd( SELECT );}
 
 selectExprList @init{
-		bool oldInSelect = _inSelect;
 		_inSelect = true;
 	}
 	: ( selectExpr | aliasedSelectExpr )+ {
-		_inSelect = oldInSelect;
+		_inSelect = false;
 	}
 	;
 
@@ -214,13 +243,9 @@ aggregateExpr
 
 // Establishes the list of aliases being used by this query.
 fromClause 
-@init{
-		// NOTE: This references the INPUT AST! (see http://www.antlr.org/doc/trees.html#Action Translation)
-		// the ouput AST (#fromClause) has not been built yet.
-		PrepareFromClauseInputTree((IASTNode) input.LT(1), input);
-	}
 	: ^(f=FROM { PushFromClause($f.tree); HandleClauseStart( FROM ); } fromElementList )
 	;
+	finally {HandleClauseEnd( FROM );}
 
 fromElementList @init{
 		bool oldInFrom = _inFrom;
@@ -304,11 +329,13 @@ withClause
 	: ^(w=WITH { HandleClauseStart( WITH ); } b=logicalExpr ) 
 	-> ^($w $b)
 	;
+	finally {HandleClauseEnd( WITH );}
 
 whereClause
 	: ^(w=WHERE { HandleClauseStart( WHERE ); } b=logicalExpr ) 
 	-> ^($w $b)
 	;
+	finally {HandleClauseEnd( WHERE );}
 
 logicalExpr
 	: ^(AND logicalExpr logicalExpr)
@@ -352,8 +379,7 @@ comparisonExpr
 	)
 	;
 
-inRhs @init {	int UP = 99999;		// TODO - added this to get compile working.  It's bogus & should be removed
-	}
+inRhs
 	: ^(IN_LIST ( collectionFunctionOrSubselect | expr* ) )
 	;
 

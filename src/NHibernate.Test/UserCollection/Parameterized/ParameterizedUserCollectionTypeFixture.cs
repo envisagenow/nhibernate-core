@@ -11,7 +11,7 @@ namespace NHibernate.Test.UserCollection.Parameterized
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "UserCollection.Parameterized.Mapping.hbm.xml" }; }
 		}
@@ -19,23 +19,26 @@ namespace NHibernate.Test.UserCollection.Parameterized
 		[Test]
 		public void BasicOperation()
 		{
-			ISession s = OpenSession();
-			ITransaction t = s.BeginTransaction();
-			Entity entity = new Entity("tester");
-			entity.Values.Add("value-1");
-			s.Persist(entity);
-			t.Commit();
-			s.Close();
+			using (ISession s = OpenSession())
+			using (ITransaction t = s.BeginTransaction())
+			{
+				var entity = new Entity("tester");
+				entity.Values.Add("value-1");
+				s.Persist(entity);
+				t.Commit();
+			}
 
-			s = OpenSession();
-			t = s.BeginTransaction();
-			entity = s.Get<Entity>("tester");
-			Assert.IsTrue(NHibernateUtil.IsInitialized(entity.Values));
-			Assert.AreEqual(1, entity.Values.Count);
-			Assert.AreEqual("Hello", ((IDefaultableList)entity.Values).DefaultValue);
-			s.Delete(entity);
-			t.Commit();
-			s.Close();
+			using (var s = OpenSession())
+			using (var t = s.BeginTransaction())
+			{
+				var entity = s.Get<Entity>("tester");
+				Assert.IsTrue(NHibernateUtil.IsInitialized(entity.Values));
+				Assert.AreEqual(1, entity.Values.Count);
+				Assert.AreEqual("Hello", ((IDefaultableList) entity.Values).DefaultValue);
+
+				s.Delete(entity);
+				t.Commit();
+			}
 		}
 	}
 }

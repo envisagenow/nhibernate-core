@@ -12,7 +12,7 @@ namespace NHibernate.Test.Ondelete
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "Ondelete.Person.hbm.xml" }; }
 		}
@@ -30,7 +30,7 @@ namespace NHibernate.Test.Ondelete
 		[Test]
 		public void JoinedSubclass()
 		{
-			IStatistics statistics = sessions.Statistics;
+			IStatistics statistics = Sfi.Statistics;
 			statistics.Clear();
 
 			ISession s = OpenSession();

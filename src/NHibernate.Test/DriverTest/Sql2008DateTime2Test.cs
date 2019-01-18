@@ -3,7 +3,6 @@ using System.Collections;
 using NHibernate.Cfg;
 using NHibernate.Dialect;
 using NUnit.Framework;
-using SharpTestsEx;
 using Environment = NHibernate.Cfg.Environment;
 
 namespace NHibernate.Test.DriverTest
@@ -15,6 +14,7 @@ namespace NHibernate.Test.DriverTest
 		public virtual TimeSpan TimeSpanProp { get; set; }
 	}
 
+	[TestFixture]
 	public class Sql2008DateTime2Test : TestCase
 	{
 		protected override void Configure(Configuration configuration)
@@ -26,7 +26,7 @@ namespace NHibernate.Test.DriverTest
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "DriverTest.EntityForMs2008.hbm.xml" }; }
 		}
@@ -46,8 +46,8 @@ namespace NHibernate.Test.DriverTest
 			using (ITransaction t = s.BeginTransaction())
 			{
 				savedId = s.Save(new EntityForMs2008
-				                 	{
-				                 		DateTimeProp = expectedMoment,
+									{
+										DateTimeProp = expectedMoment,
 														TimeSpanProp = expectedLapse,
 													});
 				t.Commit();
@@ -57,8 +57,8 @@ namespace NHibernate.Test.DriverTest
 			using (ITransaction t = s.BeginTransaction())
 			{
 				var m = s.Get<EntityForMs2008>(savedId);
-				m.DateTimeProp.Should().Be(expectedMoment);
-				m.TimeSpanProp.Should().Be(expectedLapse);
+				Assert.That(m.DateTimeProp, Is.EqualTo(expectedMoment));
+				Assert.That(m.TimeSpanProp, Is.EqualTo(expectedLapse));
 				t.Commit();
 			}
 

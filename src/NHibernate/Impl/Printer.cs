@@ -1,8 +1,9 @@
-using System.Collections;
 using System.Collections.Generic;
-
+using System.Linq;
 using NHibernate.Engine;
+using NHibernate.Intercept;
 using NHibernate.Metadata;
+using NHibernate.Properties;
 using NHibernate.Type;
 using NHibernate.Util;
 
@@ -11,15 +12,14 @@ namespace NHibernate.Impl
 	public sealed class Printer
 	{
 		private readonly ISessionFactoryImplementor _factory;
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(Printer));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(Printer));
 
 		/// <summary>
 		/// 
 		/// </summary>
 		/// <param name="entity">an actual entity object, not a proxy!</param>
-		/// <param name="entityMode"></param>
 		/// <returns></returns>
-		public string ToString(object entity, EntityMode entityMode)
+		public string ToString(object entity)
 		{
 			IClassMetadata cm = _factory.GetClassMetadata(entity.GetType());
 			if (cm == null)
@@ -32,16 +32,24 @@ namespace NHibernate.Impl
 			if (cm.HasIdentifierProperty)
 			{
 				result[cm.IdentifierPropertyName] =
-					cm.IdentifierType.ToLoggableString(cm.GetIdentifier(entity, entityMode), _factory);
+					cm.IdentifierType.ToLoggableString(cm.GetIdentifier(entity), _factory);
 			}
 
 			IType[] types = cm.PropertyTypes;
 			string[] names = cm.PropertyNames;
-			object[] values = cm.GetPropertyValues(entity, entityMode);
+			object[] values = cm.GetPropertyValues(entity);
 
 			for (int i = 0; i < types.Length; i++)
 			{
-				result[names[i]] = types[i].ToLoggableString(values[i], _factory);
+				var value = values[i];
+				if (Equals(LazyPropertyInitializer.UnfetchedProperty, value) || Equals(BackrefPropertyAccessor.Unknown, value))
+				{
+					result[names[i]] = value.ToString();
+				}
+				else
+				{
+					result[names[i]] = types[i].ToLoggableString(value, _factory);
+				}
 			}
 
 			return cm.EntityName + CollectionPrinter.ToString(result);
@@ -74,25 +82,34 @@ namespace NHibernate.Impl
 			return CollectionPrinter.ToString(result);
 		}
 
-		public void ToString(IEnumerator enumerator, EntityMode entityMode)
+		internal string ToString(IEnumerable<KeyValuePair<string, TypedValue>> namedTypedValues)
 		{
-			if (!log.IsDebugEnabled || !enumerator.MoveNext())
+			return CollectionPrinter.ToString(
+				namedTypedValues.Select(
+					ntv => new KeyValuePair<string, string>(
+						ntv.Key,
+						ntv.Value.Type.ToLoggableString(ntv.Value.Value, _factory))));
+		}
+
+		public void ToString(object[] entities)
+		{
+			if (!log.IsDebugEnabled() || entities.Length == 0)
 			{
 				return;
 			}
 
 			log.Debug("listing entities:");
-			int i = 0;
+			var i = 0;
 
-			do
+			foreach(var entity in entities)
 			{
 				if (i++ > 20)
 				{
 					log.Debug("more......");
 					break;
 				}
-				log.Debug(ToString(enumerator.Current, entityMode));
-			} while (enumerator.MoveNext());
+				log.Debug(ToString(entity));
+			}
 		}
 
 		public Printer(ISessionFactoryImplementor factory)

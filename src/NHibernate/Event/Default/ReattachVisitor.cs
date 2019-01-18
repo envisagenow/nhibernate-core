@@ -1,5 +1,6 @@
 
 using NHibernate.Action;
+using NHibernate.Engine;
 using NHibernate.Impl;
 using NHibernate.Persister.Collection;
 using NHibernate.Type;
@@ -9,11 +10,11 @@ namespace NHibernate.Event.Default
 	/// <summary>
 	/// Abstract superclass of visitors that reattach collections
 	/// </summary>
-	public abstract class ReattachVisitor : ProxyVisitor
+	public abstract partial class ReattachVisitor : ProxyVisitor
 	{
 		private readonly object ownerIdentifier;
 		private readonly object owner;
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(AbstractFlushingEventListener));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(AbstractFlushingEventListener));
 
 		protected ReattachVisitor(IEventSource session, object ownerIdentifier, object owner)
 			: base(session)
@@ -55,10 +56,9 @@ namespace NHibernate.Event.Default
 		/// <param name="source">The session from which the request originated. </param>
 		internal void RemoveCollection(ICollectionPersister role, object collectionKey, IEventSource source)
 		{
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
-				log.Debug("collection dereferenced while transient " + 
-					MessageHelper.InfoString(role, ownerIdentifier, source.Factory));
+				log.Debug("collection dereferenced while transient {0}", MessageHelper.CollectionInfoString(role, ownerIdentifier, source.Factory));
 			}
 			source.ActionQueue.AddAction(new CollectionRemoveAction(owner, role, collectionKey, false, source));
 		}
@@ -78,7 +78,7 @@ namespace NHibernate.Event.Default
 			}
 			else
 			{
-				return role.OwnerEntityPersister.GetPropertyValue(owner, role.CollectionType.LHSPropertyName, Session.EntityMode);
+				return role.OwnerEntityPersister.GetPropertyValue(owner, role.CollectionType.LHSPropertyName);
 			}
 		}
 	}

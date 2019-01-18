@@ -1,6 +1,5 @@
 using System;
-using System.Data;
-using System.Data.OleDb;
+using System.Data.Common;
 
 namespace NHibernate.Driver
 {
@@ -10,21 +9,30 @@ namespace NHibernate.Driver
 	/// <remarks>
 	/// Always look for a native .NET DataProvider before using the OleDb DataProvider.
 	/// </remarks>
-	public class OleDbDriver : DriverBase
+	public class OleDbDriver 
+#if NETFX
+		: DriverBase
+#else
+		: ReflectionBasedDriver
+#endif
 	{
+
+#if !NETFX
 		public OleDbDriver()
+			: base ("System.Data.OleDb", "System.Data.OleDb.OleDbConnection", "System.Data.OleDb.OleDbCommand")
 		{
+		}
+#else
+		public override DbConnection CreateConnection()
+		{
+			return new System.Data.OleDb.OleDbConnection();
 		}
 
-		public override IDbConnection CreateConnection()
+		public override DbCommand CreateCommand()
 		{
-			return new OleDbConnection();
+			return new System.Data.OleDb.OleDbCommand();
 		}
-
-		public override IDbCommand CreateCommand()
-		{
-			return new OleDbCommand();
-		}
+#endif
 
 		public override bool UseNamedPrefixInSql
 		{

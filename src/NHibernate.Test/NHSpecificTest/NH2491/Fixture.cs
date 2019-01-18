@@ -1,5 +1,4 @@
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH2491
 {
@@ -21,7 +20,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2491
 		public virtual SubClass SubClass { get; set; }
 	}
 
-
+	[TestFixture]
 	public class Fixture : BugTestCase
 	{
 		protected override void OnTearDown()
@@ -57,7 +56,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2491
 				// this line crashes because it tries to find the base class by
 				// the wrong column name.
 				BaseClass another;
-				Executing.This(() => another = referencing.SubClass.Another).Should().NotThrow();
+				Assert.That(() => another = referencing.SubClass.Another, Throws.Nothing);
 
 				transaction.Commit();
 			}

@@ -1,10 +1,10 @@
 using System.Linq;
 using NUnit.Framework;
-using SharpTestsEx;
 using NHibernate.Criterion;
 
 namespace NHibernate.Test.NHSpecificTest.NH2251
 {
+	[TestFixture]
 	public class Fixture : BugTestCase
 	{
 		[Test]
@@ -19,12 +19,11 @@ namespace NHibernate.Test.NHSpecificTest.NH2251
 
 				int rowcount;
 				Foo[] items;
-				Executing.This(() =>
-												{
-													rowcount = rowcountQuery.Value;
-													items = resultsQuery.ToArray();
-												}
-					).Should().NotThrow();
+				Assert.That(() =>
+				{
+					rowcount = rowcountQuery.Value;
+					items = resultsQuery.GetEnumerable().ToArray();
+				}, Throws.Nothing);
 			}
 		}
 
@@ -40,12 +39,11 @@ namespace NHibernate.Test.NHSpecificTest.NH2251
 
 				int rowcount;
 				Foo[] items;
-				Executing.This(() =>
+				Assert.That(() =>
 				{
 					rowcount = rowcountQuery.Value;
-					items = resultsQuery.ToArray();
-				}
-					).Should().NotThrow();
+					items = resultsQuery.GetEnumerable().ToArray();
+				}, Throws.Nothing);
 			}
 		}
 
@@ -100,19 +98,22 @@ namespace NHibernate.Test.NHSpecificTest.NH2251
 						.SetMaxResults(2)
 						.Future<Foo>();
 
-				Assert.That(list1.Count(), Is.EqualTo(2));
-				Assert.That(list1.ElementAt(0).Name, Is.EqualTo("name2"));
-				Assert.That(list1.ElementAt(1).Name, Is.EqualTo("name3"));
+				Assert.That(list1.GetEnumerable().Count(), Is.EqualTo(2));
+				Assert.That(list1.GetEnumerable().ElementAt(0).Name, Is.EqualTo("name2"));
+				Assert.That(list1.GetEnumerable().ElementAt(1).Name, Is.EqualTo("name3"));
 
-				Assert.That(list2.Count(), Is.EqualTo(2));
-				Assert.That(list2.ElementAt(0).Name, Is.EqualTo("name2"));
-				Assert.That(list2.ElementAt(1).Name, Is.EqualTo("name3"));
+				Assert.That(list2.GetEnumerable().Count(), Is.EqualTo(2));
+				Assert.That(list2.GetEnumerable().ElementAt(0).Name, Is.EqualTo("name2"));
+				Assert.That(list2.GetEnumerable().ElementAt(1).Name, Is.EqualTo("name3"));
 			}
 		}
 
 		[Test]
 		public void MultiplePagingParametersInSingleQuery()
 		{
+			if (!Dialect.SupportsSubSelectsWithPagingAsInPredicateRhs)
+				Assert.Ignore("Current dialect does not support paging within IN sub-queries");
+
 			using (var session = OpenSession())
 			using (var transaction = session.BeginTransaction())
 			{

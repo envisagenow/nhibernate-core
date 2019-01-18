@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using NHibernate.Engine;
 using NHibernate.Impl;
@@ -11,7 +13,7 @@ using NHibernate.Util;
 namespace NHibernate.Cache
 {
 	[Serializable]
-	public class QueryKey
+	public class QueryKey : IDeserializationCallback
 	{
 		private readonly ISessionFactoryImplementor _factory;
 		private readonly SqlString _sqlQueryString;
@@ -19,14 +21,23 @@ namespace NHibernate.Cache
 		private readonly object[] _values;
 		private readonly int _firstRow = RowSelection.NoValue;
 		private readonly int _maxRows = RowSelection.NoValue;
-		private readonly IDictionary<string, TypedValue> _namedParameters;
-		private readonly ISet<FilterKey> _filters;
-		private readonly IResultTransformer _customTransformer;
-		private readonly int _hashCode;
+
+		// Sets and dictionaries are populated last during deserialization, causing them to be potentially empty
+		// during the deserialization callback. This causes them to be unreliable when used in hashcode or equals
+		// computations. These computations occur during the deserialization callback for example when another
+		// serialized set or dictionary contain an instance of this class.
+		// So better serialize them as other structures, so long for Equals implementation which actually needs a
+		// dictionary and set.
+		private readonly KeyValuePair<string, TypedValue>[] _namedParameters;
+		private readonly FilterKey[] _filters;
+
+		private readonly CacheableResultTransformer _customTransformer;
+		// hashcode may vary among processes, they cannot be stored and have to be re-computed after deserialization
+		[NonSerialized]
+		private int? _hashCode;
 
 		private int[] _multiQueriesFirstRows;
 		private int[] _multiQueriesMaxRows;
-
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="QueryKey"/> class.
@@ -35,8 +46,9 @@ namespace NHibernate.Cache
 		/// <param name="queryString">The query string.</param>
 		/// <param name="queryParameters">The query parameters.</param>
 		/// <param name="filters">The filters.</param>
+		/// <param name="customTransformer">The result transformer; should be null if data is not transformed before being cached.</param>
 		public QueryKey(ISessionFactoryImplementor factory, SqlString queryString, QueryParameters queryParameters,
-						ISet<FilterKey> filters)
+		                ISet<FilterKey> filters, CacheableResultTransformer customTransformer)
 		{
 			_factory = factory;
 			_sqlQueryString = queryString;
@@ -54,15 +66,17 @@ namespace NHibernate.Cache
 				_firstRow = RowSelection.NoValue;
 				_maxRows = RowSelection.NoValue;
 			}
-			_namedParameters = queryParameters.NamedParameters;
-			_filters = filters;
-			_customTransformer = queryParameters.ResultTransformer;
+
+			_namedParameters = queryParameters.NamedParameters?.ToArray();
+			_filters = filters?.ToArray();
+			_customTransformer = customTransformer;
+
 			_hashCode = ComputeHashCode();
 		}
 
-		public bool HasResultTransformer
+		public CacheableResultTransformer ResultTransformer
 		{
-			get { return _customTransformer != null; }
+			get { return _customTransformer; }
 		}
 
 		public QueryKey SetFirstRows(int[] firstRows)
@@ -126,21 +140,20 @@ namespace NHibernate.Cache
 				}
 			}
 
-			if (!CollectionHelper.SetEquals(_filters, that._filters))
-			{
+			// BagEquals is less efficient than a SetEquals or DictionaryEquals, but serializing dictionaries causes
+			// issues on deserialization if GetHashCode or Equals are called in its deserialization callback. And
+			// building sets or dictionaries on the fly will in most cases be worst than BagEquals, unless re-coding
+			// its short-circuits.
+			if (!CollectionHelper.BagEquals(_filters, that._filters))
 				return false;
-			}
+			if (!CollectionHelper.BagEquals(_namedParameters, that._namedParameters, NamedParameterComparer.Instance))
+				return false;
 
-			if (!CollectionHelper.DictionaryEquals(_namedParameters, that._namedParameters))
+			if (!CollectionHelper.SequenceEquals<int>(_multiQueriesFirstRows, that._multiQueriesFirstRows))
 			{
 				return false;
 			}
-
-			if (!CollectionHelper.CollectionEquals<int>(_multiQueriesFirstRows, that._multiQueriesFirstRows))
-			{
-				return false;
-			}
-			if (!CollectionHelper.CollectionEquals<int>(_multiQueriesMaxRows, that._multiQueriesMaxRows))
+			if (!CollectionHelper.SequenceEquals<int>(_multiQueriesMaxRows, that._multiQueriesMaxRows))
 			{
 				return false;
 			}
@@ -149,7 +162,17 @@ namespace NHibernate.Cache
 
 		public override int GetHashCode()
 		{
-			return _hashCode;
+			// If the object is put in a set or dictionary during deserialization, the hashcode will not yet be
+			// computed. Compute the hashcode on the fly. So long as this happens only during deserialization, there
+			// will be no thread safety issues. For the hashcode to be always defined after deserialization, the
+			// deserialization callback is used.
+			return _hashCode ?? ComputeHashCode();
+		}
+
+		/// <inheritdoc />
+		public void OnDeserialization(object sender)
+		{
+			_hashCode = ComputeHashCode();
 		}
 
 		public int ComputeHashCode()
@@ -160,7 +183,9 @@ namespace NHibernate.Cache
 				result = 37 * result + _firstRow.GetHashCode();
 				result = 37 * result + _maxRows.GetHashCode();
 
-				result = 37 * result + (_namedParameters == null ? 0 : CollectionHelper.GetHashCode(_namedParameters));
+				result = 37 * result + (_namedParameters == null
+					? 0
+					: CollectionHelper.GetHashCode(_namedParameters, NamedParameterComparer.Instance));
 
 				for (int i = 0; i < _types.Length; i++)
 				{
@@ -189,10 +214,7 @@ namespace NHibernate.Cache
 
 				if (_filters != null)
 				{
-					foreach (object filter in _filters)
-					{
-						result = 37 * result + filter.GetHashCode();
-					}
+					result = 37 * result + CollectionHelper.GetHashCode(_filters);
 				}
 
 				result = 37 * result + (_customTransformer == null ? 0 : _customTransformer.GetHashCode());

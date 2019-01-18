@@ -1,5 +1,8 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using NHibernate.Engine;
+using NHibernate.Util;
 
 namespace NHibernate.Tuple.Entity
 {
@@ -83,7 +86,7 @@ namespace NHibernate.Tuple.Entity
 		/// <summary> Extract the values of the insertable properties of the entity (including backrefs) </summary>
 		/// <param name="entity">The entity from which to extract. </param>
 		/// <param name="mergeMap">a map of instances being merged to merged instances </param>
-		/// <param name="session">The session in which the resuest is being made. </param>
+		/// <param name="session">The session in which the request is being made. </param>
 		/// <returns> The insertable property values. </returns>
 		object[] GetPropertyValuesToInsert(object entity, IDictionary mergeMap, ISessionImplementor session);
 

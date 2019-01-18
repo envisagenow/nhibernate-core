@@ -12,5 +12,9 @@
 			get { return _aLotOfText; }
 			set { _aLotOfText = value; }
 		}
+
+		public virtual byte[] Image { get; set; }
+
+		public virtual string FieldInterceptor { get; set; }
 	}
 }

@@ -4,16 +4,19 @@ using System.Reflection;
 using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MixAutomapping
 {
+	[TestFixture]
 	public class BagCollectionTests
 	{
 		// match any IEnumerable
 		private class Entity
 		{
+			// Assigned by reflection
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 			private ICollection<string> emails;
+#pragma warning restore CS0649 // Field is never assigned to, and will always have its default value
 			public IEnumerable<string> NickNames { get; set; }
 			public byte[] Bytes { get; set; }
 			public object Emails
@@ -42,7 +45,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsBag(mi).Should().Be.True();
+			Assert.That(inspector.IsBag(mi), Is.True);
 		}
 
 		[Test]
@@ -52,7 +55,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsBag(mi).Should().Be.True();
+			Assert.That(inspector.IsBag(mi), Is.True);
 		}
 
 		[Test]
@@ -62,7 +65,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsBag(mi).Should().Be.True();
+			Assert.That(inspector.IsBag(mi), Is.True);
 		}
 
 		[Test]
@@ -72,7 +75,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsBag(mi).Should().Be.False();
+			Assert.That(inspector.IsBag(mi), Is.False);
 		}
 
 		[Test]
@@ -82,7 +85,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 			var autoinspector = new SimpleModelInspector();
 			var inspector = (IModelInspector)autoinspector;
 
-			inspector.IsBag(mi).Should().Be.False();
+			Assert.That(inspector.IsBag(mi), Is.False);
 		}
 
 		[Test]
@@ -94,7 +97,7 @@ namespace NHibernate.Test.MappingByCode.MixAutomapping
 
 			var hbmMapping = mapper.CompileMappingFor(new[] {typeof(Parent)});
 			var hbmBag = hbmMapping.RootClasses[0].Properties.OfType<HbmBag>().Single();
-			hbmBag.Key.Columns.Single().name.Should().Be("ParentId");
+			Assert.That(hbmBag.Key.Columns.Single().name, Is.EqualTo("ParentId"));
 		}
 	}
 }

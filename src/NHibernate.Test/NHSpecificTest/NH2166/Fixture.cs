@@ -2,15 +2,15 @@ using System;
 using System.Collections;
 using NHibernate.Exceptions;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH2166
 {
+	[TestFixture]
 	public class Fixture: TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
-			get { return new string[0]; }
+			get { return Array.Empty<string>(); }
 		}
 
 		[Test]
@@ -18,7 +18,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2166
 		{
 			using (var s = OpenSession())
 			{
-				Executing.This(()=> s.CreateSQLQuery("select make from ItFunky").UniqueResult<int>()).Should().Throw<GenericADOException>();
+				Assert.That(() => s.CreateSQLQuery("select make from ItFunky").UniqueResult<int>(), Throws.TypeOf<GenericADOException>());
 			}
 		}
 	}

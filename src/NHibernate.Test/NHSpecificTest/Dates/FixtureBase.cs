@@ -10,7 +10,7 @@ namespace NHibernate.Test.NHSpecificTest.Dates
 	[TestFixture]
 	public abstract class FixtureBase : TestCase
 	{
-		protected abstract override IList Mappings { get; }
+		protected abstract override string[] Mappings { get; }
 
 		protected override string MappingsAssembly
 		{
@@ -31,10 +31,6 @@ namespace NHibernate.Test.NHSpecificTest.Dates
 			catch (ArgumentException)
 			{
 				return false;
-			}
-			catch (Exception)
-			{
-				Assert.Fail("Probably a bug in the test case.");
 			}
 
 			return true;

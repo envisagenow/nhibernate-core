@@ -1,9 +1,9 @@
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH2366
 {
 	[Ignore("Not fixed yet.")]
+	[TestFixture]
 	public class Fixture : BugTestCase
 	{
 		protected override void OnSetUp()
@@ -47,7 +47,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2366
 		{
 			using (ISession session = OpenSession())
 			{
-				session.Executing(s=> s.CreateQuery("from One").List()).NotThrows();
+				Assert.That(() => session.CreateQuery("from One").List(), Throws.Nothing);
 			}
 		}
 	}

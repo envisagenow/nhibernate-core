@@ -74,6 +74,9 @@ namespace NHibernate.Test.NHSpecificTest.NH1394
 		[Test]
 		public void CanOrderBySubqueryProjection()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			using (ISession s = OpenSession())
 			{
 				using (new SqlLogSpy())
@@ -101,6 +104,9 @@ namespace NHibernate.Test.NHSpecificTest.NH1394
 		[Test]
 		public void CanOrderBySubqueryProjectionDesc()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			using (ISession s = OpenSession())
 			{
 				DetachedCriteria dc = DetachedCriteria.For<Person>("sub");

@@ -7,9 +7,9 @@ using System.Runtime.CompilerServices;
 namespace NHibernate.Transform
 {
 	[Serializable]
-	public class DistinctRootEntityResultTransformer : IResultTransformer
+	public class DistinctRootEntityResultTransformer : IResultTransformer, ITupleSubsetResultTransformer
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(DistinctRootEntityResultTransformer));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(DistinctRootEntityResultTransformer));
 		private static readonly object Hasher = new object();
 
 		internal sealed class Identity
@@ -52,21 +52,38 @@ namespace NHibernate.Transform
 				}
 			}
 
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
-				log.Debug(string.Format("transformed: {0} rows to: {1} distinct results",
-										list.Count, result.Count));
+				log.Debug("transformed: {0} rows to: {1} distinct results", list.Count, result.Count);
 			}
 			return result;
 		}
 
+
+		public bool[] IncludeInTransform(String[] aliases, int tupleLength)
+		{
+			//return RootEntityResultTransformer.INSTANCE.includeInTransform(aliases, tupleLength);
+			var transformer = new RootEntityResultTransformer();
+			return transformer.IncludeInTransform(aliases, tupleLength);
+		}
+
+
+		public bool IsTransformedValueATupleElement(String[] aliases, int tupleLength)
+		{
+			//return RootEntityResultTransformer.INSTANCE.isTransformedValueATupleElement(null, tupleLength);
+			var transformer = new RootEntityResultTransformer();
+			return transformer.IsTransformedValueATupleElement(null, tupleLength);
+		}
+
 		public override bool Equals(object obj)
 		{
-			if (obj == null)
+			if (obj == null || obj.GetHashCode() != Hasher.GetHashCode())
 			{
 				return false;
 			}
-			return obj.GetHashCode() == Hasher.GetHashCode();
+			// NH-3957: do not rely on hashcode alone.
+			// Must be the exact same type
+			return obj.GetType() == typeof(DistinctRootEntityResultTransformer);
 		}
 
 		public override int GetHashCode()

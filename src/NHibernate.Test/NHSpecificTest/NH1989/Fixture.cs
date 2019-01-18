@@ -1,4 +1,4 @@
-using System.Data;
+using System.Data.Common;
 
 using NUnit.Framework;
 
@@ -7,19 +7,27 @@ using NHibernate.Cfg;
 using NHibernate.Criterion;
 using NHibernate.Engine;
 
-using System.Collections.Generic;
-using System.Linq;
-
 namespace NHibernate.Test.NHSpecificTest.NH1989
 {
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
+		protected override bool AppliesTo(ISessionFactoryImplementor factory)
+		{
+			return factory.ConnectionProvider.Driver.SupportsMultipleQueries;
+		}
+
+		protected override void Configure(Configuration configuration)
+		{
+			base.Configure(configuration);
+			configuration.Properties[Environment.CacheProvider] = typeof(HashtableCacheProvider).AssemblyQualifiedName;
+			configuration.Properties[Environment.UseQueryCache] = "true";
+		}
+
 		protected override void OnSetUp()
 		{
-			cfg.Properties[Environment.CacheProvider] = typeof(HashtableCacheProvider).AssemblyQualifiedName;
-			cfg.Properties[Environment.UseQueryCache] = "true";
-			sessions = (ISessionFactoryImplementor)cfg.BuildSessionFactory();
+			// Clear cache at each test.
+			RebuildSessionFactory();
 		}
 
 		protected override void OnTearDown()
@@ -34,7 +42,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 
 		private static void DeleteObjectsOutsideCache(ISession s)
 		{
-			using (IDbCommand cmd = s.Connection.CreateCommand())
+			using (var cmd = s.Connection.CreateCommand())
 			{
 				cmd.CommandText = "DELETE FROM UserTable";
 				cmd.ExecuteNonQuery();
@@ -47,7 +55,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 			using (ISession s = OpenSession())
 			using (ITransaction tx = s.BeginTransaction())
 			{
-				User user = new User() { Name="test" };
+				User user = new User() { Name = "test" };
 				s.Save(user);
 				tx.Commit();
 			}
@@ -87,7 +95,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 			using (ISession s = OpenSession())
 			using (ITransaction tx = s.BeginTransaction())
 			{
-				User user = new User() { Name="test" };
+				User user = new User() { Name = "test" };
 				s.Save(user);
 				tx.Commit();
 			}
@@ -129,7 +137,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 			using (ISession s = OpenSession())
 			using (ITransaction tx = s.BeginTransaction())
 			{
-				User user = new User() { Name="test" };
+				User user = new User() { Name = "test" };
 				s.Save(user);
 				tx.Commit();
 			}
@@ -143,7 +151,6 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 						.SetCacheable(true)
 						.FutureValue<User>();
 
-				// non cacheable Future causes batch to be non-cacheable
 				int count =
 					s.CreateCriteria<User>()
 						.SetProjection(Projections.RowCount())
@@ -170,7 +177,9 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 						.FutureValue<int>()
 						.Value;
 
-				Assert.That(userFuture.Value, Is.Null,
+				Assert.That(userFuture.Value, Is.Not.Null,
+					"query results should come from cache");
+				Assert.That(count, Is.EqualTo(0),
 					"query results should not come from cache");
 			}
 		}
@@ -181,7 +190,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 			using (ISession s = OpenSession())
 			using (ITransaction tx = s.BeginTransaction())
 			{
-				User user = new User() { Name="test" };
+				User user = new User() { Name = "test" };
 				s.Save(user);
 				tx.Commit();
 			}
@@ -196,7 +205,6 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 						.SetCacheRegion("region1")
 						.FutureValue<User>();
 
-				// different cache-region causes batch to be non-cacheable
 				int count =
 					s.CreateCriteria<User>()
 						.SetProjection(Projections.RowCount())
@@ -220,6 +228,13 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 						.SetCacheRegion("region1")
 						.FutureValue<User>();
 
+				IFutureValue<User> userFutureWrongRegion =
+					s.CreateCriteria<User>()
+						.Add(Restrictions.NaturalId().Set("Name", "test"))
+						.SetCacheable(true)
+						.SetCacheRegion("region2")
+						.FutureValue<User>();
+
 				int count =
 					s.CreateCriteria<User>()
 						.SetProjection(Projections.RowCount())
@@ -228,8 +243,23 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 						.FutureValue<int>()
 						.Value;
 
-				Assert.That(userFuture.Value, Is.Null,
-					"query results should not come from cache");
+				int countWrongRegion =
+					s.CreateCriteria<User>()
+						.SetProjection(Projections.RowCount())
+						.SetCacheable(true)
+						.SetCacheRegion("region1")
+						.FutureValue<int>()
+						.Value;
+
+				Assert.That(userFuture.Value, Is.Not.Null,
+					"query results should come from cache");
+				Assert.That(count, Is.EqualTo(1),
+					"query results should come from cache");
+
+				Assert.That(userFutureWrongRegion.Value, Is.Null,
+					"query results from wrong cache region");
+				Assert.That(countWrongRegion, Is.EqualTo(0),
+					"query results from wrong cache region");
 			}
 		}
 
@@ -239,7 +269,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1989
 			using (ISession s = OpenSession())
 			using (ITransaction tx = s.BeginTransaction())
 			{
-				User user = new User() { Name="test" };
+				User user = new User() { Name = "test" };
 				s.Save(user);
 				tx.Commit();
 			}

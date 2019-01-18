@@ -4,10 +4,10 @@ using NHibernate.Mapping.ByCode;
 using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode.Impl;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MappersTests
 {
+	[TestFixture]
 	public class ManyToOneMapperTest
 	{
 		private class MyClass
@@ -35,17 +35,17 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var hbm = new HbmManyToOne();
 			var mapper = new ManyToOneMapper(null, hbm, hbmMapping);
 			mapper.Cascade(Mapping.ByCode.Cascade.Persist | Mapping.ByCode.Cascade.Remove);
-			hbm.cascade.Split(',').Select(w => w.Trim()).Should().Contain("persist").And.Contain("delete");
+			Assert.That(hbm.cascade.Split(',').Select(w => w.Trim()), Contains.Item("persist").And.Contains("delete"));
 		}
-
+		
 		[Test]
-		public void AutoCleanUnsupportedCascadeStyle()
+		public void AssignEntityName()
 		{
 			var hbmMapping = new HbmMapping();
 			var hbm = new HbmManyToOne();
-			var mapper = new ManyToOneMapper(null, hbm, hbmMapping);
-			mapper.Cascade(Mapping.ByCode.Cascade.Persist | Mapping.ByCode.Cascade.DeleteOrphans | Mapping.ByCode.Cascade.Remove);
-			hbm.cascade.Split(',').Select(w => w.Trim()).All(w => w.Satisfy(cascade => !cascade.Contains("orphan")));
+			IManyToOneMapper mapper = new ManyToOneMapper(null, hbm, hbmMapping);
+			mapper.EntityName("MyEntity");
+			Assert.That(hbm.EntityName, Is.EqualTo("MyEntity"));
 		}
 
 		[Test]
@@ -57,7 +57,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapper = new ManyToOneMapper(member, hbm, hbmMapping);
 
 			mapper.Access(Accessor.ReadOnly);
-			hbm.Access.Should().Be("readonly");
+			Assert.That(hbm.Access, Is.EqualTo("readonly"));
 		}
 
 		[Test]
@@ -69,8 +69,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapper = new ManyToOneMapper(member, hbm, hbmMapping);
 			mapper.Column(cm => cm.Name("RelationId"));
 
-			hbm.Columns.Should().Have.Count.EqualTo(1);
-			hbm.Columns.Single().name.Should().Be("RelationId");
+			Assert.That(hbm.Columns.Count(), Is.EqualTo(1));
+			Assert.That(hbm.Columns.Single().name, Is.EqualTo("RelationId"));
 		}
 
 		[Test]
@@ -81,8 +81,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapping = new HbmManyToOne();
 			var mapper = new ManyToOneMapper(member, mapping, hbmMapping);
 			mapper.Column(cm => cm.Name("Relation"));
-			mapping.column.Should().Be.Null();
-			mapping.Columns.Should().Be.Empty();
+			Assert.That(mapping.column, Is.Null);
+			Assert.That(mapping.Columns, Is.Empty);
 		}
 
 		[Test]
@@ -97,10 +97,10 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 				cm.UniqueKey("theUnique");
 				cm.NotNullable(true);
 			});
-			mapping.Items.Should().Be.Null();
-			mapping.uniquekey.Should().Be("theUnique");
-			mapping.notnull.Should().Be(true);
-			mapping.notnullSpecified.Should().Be(true);
+			Assert.That(mapping.Items, Is.Null);
+			Assert.That(mapping.uniquekey, Is.EqualTo("theUnique"));
+			Assert.That(mapping.notnull, Is.EqualTo(true));
+			Assert.That(mapping.notnullSpecified, Is.EqualTo(true));
 		}
 
 		[Test]
@@ -115,8 +115,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 				cm.SqlType("BIGINT");
 				cm.NotNullable(true);
 			});
-			mapping.Items.Should().Not.Be.Null();
-			mapping.Columns.Should().Have.Count.EqualTo(1);
+			Assert.That(mapping.Items, Is.Not.Null);
+			Assert.That(mapping.Columns.Count(), Is.EqualTo(1));
 		}
 
 		[Test]
@@ -129,10 +129,10 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			mapper.Column(cm => cm.UniqueKey("theUnique"));
 			mapper.Column(cm => cm.NotNullable(true));
 
-			mapping.Items.Should().Be.Null();
-			mapping.uniquekey.Should().Be("theUnique");
-			mapping.notnull.Should().Be(true);
-			mapping.notnullSpecified.Should().Be(true);
+			Assert.That(mapping.Items, Is.Null);
+			Assert.That(mapping.uniquekey, Is.EqualTo("theUnique"));
+			Assert.That(mapping.notnull, Is.EqualTo(true));
+			Assert.That(mapping.notnullSpecified, Is.EqualTo(true));
 		}
 
 		[Test]
@@ -151,7 +151,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 				cm.Name("column2");
 				cm.SqlType("VARCHAR(10)");
 			});
-			mapping.Columns.Should().Have.Count.EqualTo(2);
+			Assert.That(mapping.Columns.Count(), Is.EqualTo(2));
 		}
 
 		[Test]
@@ -162,8 +162,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapping = new HbmManyToOne();
 			var mapper = new ManyToOneMapper(member, mapping, hbmMapping);
 			mapper.Columns(cm => cm.Length(50), cm => cm.SqlType("VARCHAR(10)"));
-			mapping.Columns.Should().Have.Count.EqualTo(2);
-			mapping.Columns.All(cm => cm.name.Satisfy(n => !string.IsNullOrEmpty(n)));
+			Assert.That(mapping.Columns.Count(), Is.EqualTo(2));
+			Assert.That(mapping.Columns.All(cm => !string.IsNullOrEmpty(cm.name)), Is.True);
 		}
 
 		[Test]
@@ -174,7 +174,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapping = new HbmManyToOne();
 			var mapper = new ManyToOneMapper(member, mapping, hbmMapping);
 			mapper.Columns(cm => cm.Length(50), cm => cm.SqlType("VARCHAR(10)"));
-			Executing.This(() => mapper.Column(cm => cm.Length(50))).Should().Throw<MappingException>();
+			Assert.That(() => mapper.Column(cm => cm.Length(50)), Throws.TypeOf<MappingException>());
 		}
 
 		[Test]
@@ -190,12 +190,67 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			mapper.UniqueKey("AA");
 			mapper.Index("II");
 
-			mapping.Items.Should().Be.Null();
-			mapping.column.Should().Be("pizza");
-			mapping.notnull.Should().Be(true);
-			mapping.unique.Should().Be(true);
-			mapping.uniquekey.Should().Be("AA");
-			mapping.index.Should().Be("II");
+			Assert.That(mapping.Items, Is.Null);
+			Assert.That(mapping.column, Is.EqualTo("pizza"));
+			Assert.That(mapping.notnull, Is.EqualTo(true));
+			Assert.That(mapping.unique, Is.EqualTo(true));
+			Assert.That(mapping.uniquekey, Is.EqualTo("AA"));
+			Assert.That(mapping.index, Is.EqualTo("II"));
+		}
+
+		[Test(Description = "NH-3618")]
+		public void SetUniqueToMultiColumn()
+		{
+			var hbmMapping = new HbmMapping();
+			var member = typeof(MyClass).GetProperty("Relation");
+			var mapping = new HbmManyToOne();
+			var mapper = new ManyToOneMapper(member, mapping, hbmMapping);
+			mapper.Columns(x => x.Name("pizza"), x => x.Name("pasta"));
+			mapper.Unique(true);
+			mapper.UniqueKey("AA");
+			mapper.Index("II");
+
+			Assert.That(mapping.Items, Is.Not.Null.And.Not.Empty);
+			Assert.IsNull(mapping.column);
+			Assert.IsTrue(mapping.unique);
+			Assert.That(mapping.uniquekey, Is.EqualTo("AA"));
+			Assert.That(mapping.index, Is.EqualTo("II"));
+		}
+
+		[Test]
+		public void CanSetColumnsAndFormulas()
+		{
+			var hbmMapping = new HbmMapping();
+			var member = typeof(MyClass).GetProperty("Relation");
+			var mapping = new HbmManyToOne();
+			IManyToOneMapper mapper = new ManyToOneMapper(member, mapping, hbmMapping);
+			mapper.ColumnsAndFormulas(x => x.Name("pizza"), x => x.Formula("risotto"), x => x.Name("pasta"));
+
+			Assert.That(mapping.Items, Has.Length.EqualTo(3));
+			Assert.That(mapping.Items[0], Is.TypeOf<HbmColumn>(), "first");
+			Assert.That(mapping.Items[1], Is.TypeOf<HbmFormula>(), "second");
+			Assert.That(mapping.Items[2], Is.TypeOf<HbmColumn>(), "third");
+			Assert.That(((HbmColumn)mapping.Items[0]).name, Is.EqualTo("pizza"));
+			Assert.That(((HbmFormula)mapping.Items[1]).Text, Has.Length.EqualTo(1).And.One.EqualTo("risotto"));
+			Assert.That(((HbmColumn)mapping.Items[2]).name, Is.EqualTo("pasta"));
+			Assert.That(mapping.column, Is.Null, "column");
+			Assert.That(mapping.formula, Is.Null, "formula");
+		}
+
+		[Test]
+		public void CanSetMultipleFormulas()
+		{
+			var hbmMapping = new HbmMapping();
+			var member = typeof(MyClass).GetProperty("Relation");
+			var mapping = new HbmManyToOne();
+			IManyToOneMapper mapper = new ManyToOneMapper(member, mapping, hbmMapping);
+			mapper.Formulas("formula1", "formula2", "formula3");
+
+			Assert.That(mapping.formula, Is.Null);
+			Assert.That(mapping.Items, Has.Length.EqualTo(3));
+			Assert.That(
+				mapping.Items.Cast<HbmFormula>().Select(f => f.Text.Single()),
+				Is.EquivalentTo(new[] { "formula1", "formula2", "formula3" }));
 		}
 
 		[Test]
@@ -208,8 +263,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.Fetch(FetchKind.Join);
 
-			mapping.fetch.Should().Be(HbmFetchMode.Join);
-			mapping.fetchSpecified.Should().Be.True();
+			Assert.That(mapping.fetch, Is.EqualTo(HbmFetchMode.Join));
+			Assert.That(mapping.fetchSpecified, Is.True);
 		}
 
 		[Test]
@@ -222,8 +277,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.Fetch(FetchKind.Select);
 
-			mapping.fetch.Should().Be(HbmFetchMode.Select);
-			mapping.fetchSpecified.Should().Be.False();
+			Assert.That(mapping.fetch, Is.EqualTo(HbmFetchMode.Select));
+			Assert.That(mapping.fetchSpecified, Is.False);
 		}
 
 		[Test]
@@ -236,7 +291,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.Class(typeof(Relation));
 
-			mapping.Class.Should().Contain("Relation").And.Not.Contain("IRelation");
+			Assert.That(mapping.Class, Does.Contain("Relation").And.Not.Contains("IRelation"));
 		}
 
 		[Test]
@@ -247,7 +302,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapping = new HbmManyToOne();
 			var mapper = new ManyToOneMapper(member, mapping, hbmMapping);
 
-			Executing.This(() => mapper.Class(typeof(Whatever))).Should().Throw<ArgumentOutOfRangeException>();
+			Assert.That(() => mapper.Class(typeof(Whatever)), Throws.TypeOf<ArgumentOutOfRangeException>());
 		}
 
 		[Test]
@@ -258,8 +313,8 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapping = new HbmManyToOne();
 			var mapper = new ManyToOneMapper(member, mapping, hbmMapping);
 			mapper.Lazy(LazyRelation.NoProxy);
-			mapping.Lazy.Should().Have.Value();
-			mapping.Lazy.Should().Be(HbmLaziness.NoProxy);
+			Assert.That(mapping.Lazy, Is.Not.Null);
+			Assert.That(mapping.Lazy, Is.EqualTo(HbmLaziness.NoProxy));
 		}
 
 		[Test]
@@ -271,7 +326,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapper = new ManyToOneMapper(member, hbm, hbmMapping);
 
 			mapper.Update(false);
-			hbm.update.Should().Be.False();
+			Assert.That(hbm.update, Is.False);
 		}
 
 		[Test]
@@ -283,7 +338,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 			var mapper = new ManyToOneMapper(member, hbm, hbmMapping);
 
 			mapper.Insert(false);
-			hbm.insert.Should().Be.False();
+			Assert.That(hbm.insert, Is.False);
 		}
 
 		[Test]
@@ -296,7 +351,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.ForeignKey("MyFkName");
 
-			hbm.foreignkey.Should().Be("MyFkName");
+			Assert.That(hbm.foreignkey, Is.EqualTo("MyFkName"));
 		}
 
 		[Test]
@@ -309,7 +364,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.PropertyRef("PropertyRefName");
 
-			hbm.propertyref.Should().Be("PropertyRefName");
+			Assert.That(hbm.propertyref, Is.EqualTo("PropertyRefName"));
 		}
 
 		[Test]
@@ -322,7 +377,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.NotFound(NotFoundMode.Exception);
 
-			hbm.notfound.Should().Be(HbmNotFoundMode.Exception);
+			Assert.That(hbm.notfound, Is.EqualTo(HbmNotFoundMode.Exception));
 		}
 
 		[Test]
@@ -335,7 +390,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests
 
 			mapper.NotFound(NotFoundMode.Ignore);
 
-			hbm.notfound.Should().Be(HbmNotFoundMode.Ignore);
+			Assert.That(hbm.notfound, Is.EqualTo(HbmNotFoundMode.Ignore));
 		}
 	}
 }

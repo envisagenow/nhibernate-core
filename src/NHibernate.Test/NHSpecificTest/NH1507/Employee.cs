@@ -1,13 +1,17 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace NHibernate.Test.NHSpecificTest.NH1507
 {
 	[Serializable]
 	public class Employee
 	{
+		// Used by reflection
+#pragma warning disable CS0169 // The field is never used
 		private int _id;
-		private IList nativeOrders;
+#pragma warning restore CS0169 // The field is never used
+		private IList<Order> nativeOrders;
 
 		public virtual string LastName { get; set; }
 
@@ -43,13 +47,13 @@ namespace NHibernate.Test.NHSpecificTest.NH1507
 
 		public virtual string PhotoPath { get; set; }
 
-		protected virtual IList orders
+		protected virtual IList<Order> orders
 		{
 			get
 			{
 				if (nativeOrders == null)
 				{
-					nativeOrders = new ArrayList();
+					nativeOrders = new List<Order>();
 				}
 
 				return nativeOrders;

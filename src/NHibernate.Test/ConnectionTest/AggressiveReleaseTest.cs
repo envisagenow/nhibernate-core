@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
-using System.Data;
+using System.Collections.Generic;
+using System.Data.Common;
 using NHibernate.Cfg;
 using NHibernate.Util;
 using NUnit.Framework;
@@ -175,23 +176,24 @@ namespace NHibernate.Test.ConnectionTest
 		{
 			Prepare();
 
-			IDbConnection originalConnection = sessions.ConnectionProvider.GetConnection();
-			ISession session = sessions.OpenSession(originalConnection);
+			using (var originalConnection = Sfi.ConnectionProvider.GetConnection())
+			using (var session = Sfi.WithOptions().Connection(originalConnection).OpenSession())
+			{
+				var silly = new Silly("silly");
+				session.Save(silly);
 
-			Silly silly = new Silly("silly");
-			session.Save(silly);
+				// this will cause the connection manager to cycle through the aggressive Release logic;
+				// it should not Release the connection since we explicitly supplied it ourselves.
+				session.Flush();
 
-			// this will cause the connection manager to cycle through the aggressive Release logic;
-			// it should not Release the connection since we explicitly suplied it ourselves.
-			session.Flush();
+				Assert.IsTrue(originalConnection == session.Connection, "Different connections");
 
-			Assert.IsTrue(originalConnection == session.Connection, "Different connections");
+				session.Delete(silly);
+				session.Flush();
 
-			session.Delete(silly);
-			session.Flush();
-
-			Release(session);
-			originalConnection.Close();
+				Release(session);
+				originalConnection.Close();
+			}
 			Done();
 		}
 
@@ -202,7 +204,7 @@ namespace NHibernate.Test.ConnectionTest
 		//    Prepare();
 		//    ISession s = GetSessionUnderTest();
 
-		//    IDbConnection conn = s.Connection;
+		//    DbConnection conn = s.Connection;
 		//    Assert.IsTrue(((SessionImpl) s).ConnectionManager.HasBorrowedConnection);
 		//    conn.Close();
 		//    Assert.IsFalse(((SessionImpl) s).ConnectionManager.HasBorrowedConnection);
@@ -218,7 +220,7 @@ namespace NHibernate.Test.ConnectionTest
 			ISession s = GetSessionUnderTest();
 			s.BeginTransaction();
 
-			IList entities = new ArrayList();
+			IList<Silly> entities = new List<Silly>();
 			for (int i = 0; i < 10; i++)
 			{
 				Other other = new Other("other-" + i);

@@ -4,7 +4,8 @@ namespace NHibernate.Test.NHSpecificTest.NH1850
 {
 	using System;
 	using AdoNet;
-	using Environment=NHibernate.Cfg.Environment;
+	using NHibernate.Engine;
+	using Environment = NHibernate.Cfg.Environment;
 
 	[TestFixture]
 	public class Fixture:BugTestCase
@@ -14,10 +15,19 @@ namespace NHibernate.Test.NHSpecificTest.NH1850
 			configuration.SetProperty(Environment.BatchSize, "1");
 		}
 
-        protected override bool AppliesTo(Dialect.Dialect dialect)
-        {
-            return dialect.SupportsSqlBatches;
-        }
+		protected override bool AppliesTo(ISessionFactoryImplementor factory)
+		{
+			// This test heavily depends on the batcher implementation.
+			// The MySql one likely does not issue the expected logs, but is in fact unused
+			// (driver does not supply it, it needs to be explicitly configured).
+			// The Oracle one logs twice, causing the expected count to not match.
+			// The non batching one just does one single log instead of many.
+			// (This test has never test anything else than SQL Server because it was previously
+			// applied according to dialect.SupportsSqlBatches which is utterly unrelated to
+			// the batcher and just tell about "GO" SQL Server Client tools convention. This was
+			// causing it to fail with ODBC + SQL Server, since ODBC uses the non batching batcher.)
+			return factory.Settings.BatcherFactory is SqlClientBatchingBatcherFactory;
+		}
 
 		[Test]
 		public void CanGetQueryDurationForDelete()
@@ -29,9 +39,7 @@ namespace NHibernate.Test.NHSpecificTest.NH1850
 				session.CreateQuery("delete Customer").ExecuteUpdate();
 
 				var wholeLog = spy.GetWholeLog();
-				Assert.True(
-					wholeLog.Contains("ExecuteNonQuery took")
-					);
+				Assert.That(wholeLog.Contains("ExecuteNonQuery took"), Is.True);
 
 				tx.Rollback();
 			}
@@ -79,12 +87,8 @@ namespace NHibernate.Test.NHSpecificTest.NH1850
 				session.CreateQuery("from Customer").List();
 
 				var wholeLog = spy.GetWholeLog();
-				Assert.True(
-					wholeLog.Contains("ExecuteReader took")
-					);
-				Assert.True(
-					wholeLog.Contains("DataReader was closed after")
-					);
+				Assert.That(wholeLog.Contains("ExecuteReader took"), Is.True);
+				Assert.That(wholeLog.Contains("DataReader was closed after"), Is.True);
 
 				tx.Rollback();
 			}

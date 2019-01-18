@@ -10,6 +10,12 @@ namespace NHibernate.Test.NHSpecificTest.NH2760
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
+		protected override bool AppliesTo(Dialect.Dialect dialect)
+		{
+			// All four tests translate to scalar sub-select.
+			return Dialect.SupportsScalarSubSelects;
+		}
+
 		protected override void OnSetUp()
 		{
 			base.OnSetUp();
@@ -51,6 +57,9 @@ namespace NHibernate.Test.NHSpecificTest.NH2760
 		[Test]
 		public void ShouldBeAbleToSelectUserGroupAndOrderByUserCount()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			using (ISession session = base.OpenSession())
 			using (ITransaction transaction = session.BeginTransaction())
 			{
@@ -119,6 +128,9 @@ namespace NHibernate.Test.NHSpecificTest.NH2760
 		[Test]
 		public void ShouldBeAbleToSelectUserGroupAndOrderByUserCountWithHql()
 		{
+			if (!TestDialect.SupportsAggregatingScalarSubSelectsInOrderBy)
+				Assert.Ignore("Dialect does not support aggregating scalar sub-selects in order by");
+
 			using (ISession session = base.OpenSession())
 			using (ITransaction transaction = session.BeginTransaction())
 			{

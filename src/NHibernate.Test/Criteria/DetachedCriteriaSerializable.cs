@@ -16,7 +16,7 @@ namespace NHibernate.Test.Criteria
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "Criteria.Enrolment.hbm.xml" }; }
 		}
@@ -281,21 +281,29 @@ namespace NHibernate.Test.Criteria
 		}
 
 		[Test]
-		public void ResultTransformes()
+		public void ResultTransformesAreSerializable()
 		{
 			IResultTransformer rt = new RootEntityResultTransformer();
-			NHAssert.IsSerializable(rt);
-
-			rt = new AliasToBeanConstructorResultTransformer(typeof(StudentDTO).GetConstructor(new System.Type[] { }));
-			NHAssert.IsSerializable(rt);
-
-			rt = new AliasToBeanResultTransformer(typeof(StudentDTO));
 			NHAssert.IsSerializable(rt);
 
 			rt = new DistinctRootEntityResultTransformer();
 			NHAssert.IsSerializable(rt);
 
 			rt = new PassThroughResultTransformer();
+			NHAssert.IsSerializable(rt);
+		}
+
+		[Test]
+		public void AliasToBeanConstructorResultTransformerIsSerializable()
+		{
+			var rt = new AliasToBeanConstructorResultTransformer(typeof(StudentDTO).GetConstructor(System.Type.EmptyTypes));
+			NHAssert.IsSerializable(rt);
+		}
+
+		[Test]
+		public void AliasToBeanResultTransformerIsSerializable()
+		{
+			var rt = new AliasToBeanResultTransformer(typeof(StudentDTO));
 			NHAssert.IsSerializable(rt);
 		}
 
@@ -357,9 +365,12 @@ namespace NHibernate.Test.Criteria
 				.Add(Expression.Lt("StudentNumber", 668L));
 			SerializeAndList(dc);
 
-			dc = DetachedCriteria.For(typeof(Enrolment))
-				.SetProjection(Projections.Count("StudentNumber").SetDistinct());
-			SerializeAndList(dc);
+			if (TestDialect.SupportsCountDistinct)
+			{
+				dc = DetachedCriteria.For(typeof(Enrolment))
+					.SetProjection(Projections.Count("StudentNumber").SetDistinct());
+				SerializeAndList(dc);
+			}
 
 			dc = DetachedCriteria.For(typeof(Enrolment))
 				.SetProjection(Projections.ProjectionList()

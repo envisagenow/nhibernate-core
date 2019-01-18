@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using NHibernate.Collection;
 using NHibernate.Collection.Generic;
 using NHibernate.Engine;
@@ -13,7 +14,7 @@ namespace NHibernate.Type
 	/// to the database.
 	/// </summary>
 	[Serializable]
-	public class GenericMapType<TKey, TValue> : MapType
+	public partial class GenericMapType<TKey, TValue> : CollectionType
 	{
 		/// <summary>
 		/// Initializes a new instance of a <see cref="GenericMapType{TKey, TValue}"/> class for
@@ -24,7 +25,7 @@ namespace NHibernate.Type
 		/// owner object containing the collection ID, or <see langword="null" /> if it is
 		/// the primary key.</param>
 		public GenericMapType(string role, string propertyRef)
-			: base(role, propertyRef, false)
+			: base(role, propertyRef)
 		{
 		}
 
@@ -43,6 +44,12 @@ namespace NHibernate.Type
 		public override System.Type ReturnedClass
 		{
 			get { return typeof(IDictionary<TKey, TValue>); }
+		}
+
+
+		public override IEnumerable GetElementsIterator(object collection)
+		{
+			return ((IDictionary<TKey, TValue>) collection).Values;
 		}
 
 		/// <summary>
@@ -64,27 +71,33 @@ namespace NHibernate.Type
 			((IDictionary<TKey, TValue>) collection).Add((KeyValuePair<TKey, TValue>) element);
 		}
 
+		protected override void Clear(object collection)
+		{
+			((IDictionary) collection).Clear();
+		}
+
 		public override object ReplaceElements(object original, object target, object owner, IDictionary copyCache, ISessionImplementor session)
 		{
-			ICollectionPersister cp = session.Factory.GetCollectionPersister(Role);
+			var cp = session.Factory.GetCollectionPersister(Role);
 
-			IDictionary<TKey, TValue> result = (IDictionary<TKey, TValue>)target;
+			var targetPc = target as IPersistentCollection;
+			var originalPc = original as IPersistentCollection;
+			var iterOriginal = (IDictionary<TKey, TValue>)original;
+			var clearTargetsDirtyFlag = ShouldTargetsDirtyFlagBeCleared(targetPc, originalPc, iterOriginal);
+
+			var result = (IDictionary<TKey, TValue>)target;
 			result.Clear();
 
-			IEnumerable<KeyValuePair<TKey, TValue>> iter = (IDictionary<TKey, TValue>)original; 
-			foreach (KeyValuePair<TKey, TValue> me in iter)
+			foreach (var me in iterOriginal)
 			{
-				TKey key = (TKey)cp.IndexType.Replace(me.Key, null, session, owner, copyCache);
-				TValue value = (TValue)cp.ElementType.Replace(me.Value, null, session, owner, copyCache);
+				var key = (TKey)cp.IndexType.Replace(me.Key, null, session, owner, copyCache);
+				var value = (TValue)cp.ElementType.Replace(me.Value, null, session, owner, copyCache);
 				result[key] = value;
 			}
 
-			var originalPc = original as IPersistentCollection;
-			var resultPc = result as IPersistentCollection;
-			if (originalPc != null && resultPc != null)
+			if (clearTargetsDirtyFlag)
 			{
-				if (!originalPc.IsDirty)
-					resultPc.ClearDirty();
+				targetPc.ClearDirty();
 			}
 
 			return result;
@@ -93,6 +106,23 @@ namespace NHibernate.Type
 		public override object Instantiate(int anticipatedSize)
 		{
 			return anticipatedSize <= 0 ? new Dictionary<TKey, TValue>() : new Dictionary<TKey, TValue>(anticipatedSize + 1);
+		}
+
+		public override object IndexOf(object collection, object element)
+		{
+			var dictionary = (IDictionary<TKey, TValue>) collection;
+
+			return dictionary
+				.Where(pair => Equals(pair.Value, element))
+				.Select(pair => pair.Key)
+				.FirstOrDefault();
+		}
+
+		protected override bool AreCollectionElementsEqual(IEnumerable original, IEnumerable target)
+		{
+			var first = (IDictionary<TKey, TValue>)original;
+			var second = (IDictionary<TKey, TValue>)target;
+			return first.Count == second.Count && first.All(keyValue => second.Contains(keyValue));
 		}
 	}
 }

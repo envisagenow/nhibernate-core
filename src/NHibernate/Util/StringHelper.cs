@@ -10,6 +10,11 @@ namespace NHibernate.Util
 	/// <summary></summary>
 	public static class StringHelper
 	{
+		/// <summary>
+		/// This allows for both CRLF and lone LF line separators.
+		/// </summary>
+		internal static readonly string[] LineSeparators = {"\r\n", "\n"};
+
 		public const string WhiteSpace = " \n\r\f\t";
 
 		/// <summary></summary>
@@ -78,15 +83,26 @@ namespace NHibernate.Util
 			return buf.ToString();
 		}
 
+		//Since v5.3
+		[Obsolete("Please use string.Replace or Regex.Replace instead.")]
 		public static string Replace(string template, string placeholder, string replacement)
 		{
-			return Replace(template, placeholder, replacement, false);
+			// sometimes a null value will get passed in here -> SqlWhereStrings are a good example
+			return template?.Replace(placeholder, replacement);
 		}
 
+		//Since v5.3
+		[Obsolete("Please use string.Replace or Regex.Replace instead.")]
 		public static string Replace(string template, string placeholder, string replacement, bool wholeWords)
 		{
+			Predicate<string> isWholeWord = c => WhiteSpace.Contains(c) || ClosedParen.Equals(c) || Comma.Equals(c);
+			return ReplaceByPredicate(template, placeholder, replacement, wholeWords, isWholeWord);
+		}
+
+		private static string ReplaceByPredicate(string template, string placeholder, string replacement, bool useWholeWord, Predicate<string> isWholeWord)
+		{
 			// sometimes a null value will get passed in here -> SqlWhereStrings are a good example
-			if (template == null)
+			if (string.IsNullOrWhiteSpace(template))
 			{
 				return null;
 			}
@@ -100,21 +116,30 @@ namespace NHibernate.Util
 			{
 				// NH different implementation (NH-1253)
 				string replaceWith = replacement;
-				if(loc + placeholder.Length < template.Length)
+				if (loc + placeholder.Length < template.Length)
 				{
 					string afterPlaceholder = template[loc + placeholder.Length].ToString();
 					//After a token in HQL there can be whitespace, closedparen or comma.. 
-					if(wholeWords && !(WhiteSpace.Contains(afterPlaceholder) || ClosedParen.Equals(afterPlaceholder) || Comma.Equals(afterPlaceholder)))
+					if (useWholeWord && !isWholeWord(afterPlaceholder))
 					{
 						//If this is not a full token we don't want to touch it
 						replaceWith = placeholder;
 					}
 				}
 
-				return
-					new StringBuilder(template.Substring(0, loc)).Append(replaceWith).Append(
-						Replace(template.Substring(loc + placeholder.Length), placeholder, replacement, wholeWords)).ToString();
+				return new StringBuilder(template.Substring(0, loc))
+					.Append(replaceWith)
+					.Append(ReplaceByPredicate(template.Substring(loc + placeholder.Length), placeholder, replacement, useWholeWord, isWholeWord))
+					.ToString();
 			}
+		}
+
+		//Since v5.3
+		[Obsolete("Please use string.Replace or Regex.Replace instead.")]
+		public static string ReplaceWholeWord(this string template, string placeholder, string replacement)
+		{
+			Predicate<string> isWholeWord = s => !Char.IsLetterOrDigit(s[0]);
+			return ReplaceByPredicate(template, placeholder, replacement, true, isWholeWord);
 		}
 
 		/// <summary>
@@ -141,7 +166,7 @@ namespace NHibernate.Util
 		}
 
 		/// <summary>
-		/// Just a façade for calling string.Split()
+		/// Just a facade for calling string.Split()
 		/// We don't use our StringTokenizer because string.Split() is
 		/// more efficient (but it only works when we don't want to retrieve the delimiters)
 		/// </summary>
@@ -177,7 +202,7 @@ namespace NHibernate.Util
 		/// <returns></returns>
 		public static string Unqualify(string qualifiedName)
 		{
-			if(qualifiedName.IndexOf('`') > 0)
+			if (qualifiedName.IndexOf('`') > 0)
 			{
 				// less performance but correctly manage generics classes
 				// where the entity-name was not specified
@@ -185,7 +210,7 @@ namespace NHibernate.Util
 				// for the same generic-entity implementation
 				return GetClassname(qualifiedName);
 			}
-			return Unqualify(qualifiedName, ".");
+			return Unqualify(qualifiedName, '.');
 		}
 
 		/// <summary>
@@ -195,6 +220,11 @@ namespace NHibernate.Util
 		/// <param name="seperator"></param>
 		/// <returns></returns>
 		public static string Unqualify(string qualifiedName, string seperator)
+		{
+			return qualifiedName.Substring(qualifiedName.LastIndexOf(seperator) + 1);
+		}
+		
+		internal static string Unqualify(string qualifiedName, char seperator)
 		{
 			return qualifiedName.Substring(qualifiedName.LastIndexOf(seperator) + 1);
 		}
@@ -239,7 +269,7 @@ namespace NHibernate.Util
 		/// <returns></returns>
 		public static string Qualifier(string qualifiedName)
 		{
-			int loc = qualifiedName.LastIndexOf(".");
+			int loc = qualifiedName.LastIndexOf('.');
 			if (loc < 0)
 			{
 				return String.Empty;
@@ -310,10 +340,46 @@ namespace NHibernate.Util
 		/// <returns></returns>
 		public static string Root(string qualifiedName)
 		{
-			int loc = qualifiedName.IndexOf(".");
+			int loc = qualifiedName.IndexOf('.');
 			return (loc < 0)
 					? qualifiedName
 					: qualifiedName.Substring(0, loc);
+		}
+
+		/// <summary>
+		/// Returns true if given name is not root property name
+		/// </summary>
+		/// <param name="qualifiedName"></param>
+		/// <param name="root">Returns root name</param>
+		internal static bool IsNotRoot(string qualifiedName, out string root)
+		{
+			root = qualifiedName;
+			int loc = qualifiedName.IndexOf('.');
+			if (loc < 0)
+				return false;
+
+			root = qualifiedName.Substring(0, loc);
+			return true;
+		}
+
+		/// <summary>
+		/// Returns true if given name is not root property name
+		/// </summary>
+		/// <param name="qualifiedName"></param>
+		/// <param name="root">Returns root name</param>
+		/// <param name="unrootPath">Returns "unrooted" name, or empty string for root </param>
+		/// <returns></returns>
+		internal static bool IsNotRoot(string qualifiedName, out string root, out string unrootPath)
+		{
+			unrootPath = string.Empty;
+			root = qualifiedName;
+			int loc = qualifiedName.IndexOf('.');
+			if (loc < 0)
+				return false;
+
+			unrootPath = qualifiedName.Substring(loc + 1);
+			root = qualifiedName.Substring(0, loc);
+			return true;
 		}
 
 		/// <summary>
@@ -326,8 +392,8 @@ namespace NHibernate.Util
 		/// </returns>
 		public static bool BooleanValue(string value)
 		{
-			string trimmed = value.Trim().ToLowerInvariant();
-			return trimmed.Equals("true") || trimmed.Equals("t");
+			string trimmed = value.Trim();
+			return trimmed.Equals("true", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("t", StringComparison.OrdinalIgnoreCase);
 		}
 
 		private static string NullSafeToString(object obj)
@@ -360,11 +426,11 @@ namespace NHibernate.Util
 
 		public static string LinesToString(this string[] text)
 		{
-			if(text == null)
+			if (text == null)
 			{
 				return null;
 			}
-			if(text.Length == 1)
+			if (text.Length == 1)
 			{
 				return text[0];
 			}
@@ -380,13 +446,16 @@ namespace NHibernate.Util
 		/// <param name="placeholders"></param>
 		/// <param name="replacements"></param>
 		/// <returns></returns>
-		public static string[] Multiply(string str, IEnumerator placeholders, IEnumerator replacements)
+		public static string[] Multiply(string str, IEnumerable<object> placeholders, IEnumerable<object> replacements)
 		{
-			string[] result = new string[] { str };
-			while (placeholders.MoveNext())
+			var result = new [] { str };
+			using (var replacementsIterator = replacements.GetEnumerator())
 			{
-				replacements.MoveNext();
-				result = Multiply(result, placeholders.Current as string, replacements.Current as string[]);
+				foreach (var placeholder in placeholders)
+				{
+					replacementsIterator.MoveNext();
+					result = Multiply(result, placeholder as string, replacementsIterator.Current as string[]);
+				}
 			}
 			return result;
 		}
@@ -494,7 +563,7 @@ namespace NHibernate.Util
 				string[] qualified = new string[len];
 				for (int i = 0; i < len; i++)
 				{
-					qualified[i] = Qualify(prefix, names[i]);
+					qualified[i] = names[i] == null ? null : Qualify(prefix, names[i]);
 				}
 				return qualified;
 			}
@@ -506,7 +575,12 @@ namespace NHibernate.Util
 
 		public static int FirstIndexOfChar(string sqlString, string str, int startIndex)
 		{
-			return sqlString.IndexOfAny(str.ToCharArray(), startIndex);
+			return FirstIndexOfChar(sqlString, str.ToCharArray(), startIndex);
+		}
+		
+		internal static int FirstIndexOfChar(string sqlString, char[] chars, int startIndex)
+		{
+			return sqlString.IndexOfAny(chars, startIndex);
 		}
 
 		public static string Truncate(string str, int length)
@@ -585,7 +659,7 @@ namespace NHibernate.Util
 			{
 				return result + "x"; //ick!
 			}
-			if(char.IsLetter(result[0]) || '_' == result[0])
+			if (char.IsLetter(result[0]) || '_' == result[0])
 			{
 				return result;
 			}
@@ -594,10 +668,10 @@ namespace NHibernate.Util
 
 		public static string MoveAndToBeginning(string filter)
 		{
-			if (filter.Trim().Length > 0)
+			if (!string.IsNullOrWhiteSpace(filter))
 			{
 				filter += " and ";
-				if (filter.StartsWith(" and "))
+				if (filter.StartsWith(" and ", StringComparison.Ordinal))
 				{
 					filter = filter.Substring(4);
 				}
@@ -607,38 +681,65 @@ namespace NHibernate.Util
 
 		public static string Unroot(string qualifiedName)
 		{
-			int loc = qualifiedName.IndexOf(".");
+			int loc = qualifiedName.IndexOf('.');
 			return (loc < 0) ? qualifiedName : qualifiedName.Substring(loc + 1);
 		}
 
+		// Since 5.2
+		[Obsolete("This method has no more usage and will be removed in a future version")]
 		public static bool EqualsCaseInsensitive(string a, string b)
 		{
 			return StringComparer.InvariantCultureIgnoreCase.Compare(a, b) == 0;
 		}
 
+		// Since 5.2
+		[Obsolete("This method has no more usage and will be removed in a future version")]
 		public static int IndexOfCaseInsensitive(string source, string value)
 		{
 			return source.IndexOf(value, StringComparison.InvariantCultureIgnoreCase);
 		}
 
+		// Since 5.2
+		[Obsolete("This method has no more usage and will be removed in a future version")]
 		public static int IndexOfCaseInsensitive(string source, string value, int startIndex)
 		{
 			return source.IndexOf(value, startIndex, StringComparison.InvariantCultureIgnoreCase);
 		}
 
+		// Since 5.2
+		[Obsolete("This method has no more usage and will be removed in a future version")]
 		public static int IndexOfCaseInsensitive(string source, string value, int startIndex, int count)
 		{
 			return source.IndexOf(value, startIndex, count, StringComparison.InvariantCultureIgnoreCase);
 		}
 
+		// Since 5.2
+		[Obsolete("This method has no more usage and will be removed in a future version")]
 		public static int LastIndexOfCaseInsensitive(string source, string value)
 		{
 			return source.LastIndexOf(value, StringComparison.InvariantCultureIgnoreCase);
 		}
 
+		// Since 5.2
+		[Obsolete("This method has no more usage and will be removed in a future version")]
 		public static bool StartsWithCaseInsensitive(string source, string prefix)
 		{
 			return source.StartsWith(prefix, StringComparison.InvariantCultureIgnoreCase);
+		}
+
+		internal static bool ContainsCaseInsensitive(string source, string value)
+		{
+			return source.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		internal static bool StartsWith(this string source, char value)
+		{
+			return source.Length > 0 && source[0] == value;
+		}
+
+		internal static bool EndsWith(this string source, char value)
+		{
+			return source.Length > 0 && source[source.Length - 1] == value;
 		}
 
 		/// <summary>
@@ -688,7 +789,7 @@ namespace NHibernate.Util
 
 		public static bool IsBackticksEnclosed(string identifier)
 		{
-			return !string.IsNullOrEmpty(identifier) && identifier.StartsWith("`") && identifier.EndsWith("`");
+			return !string.IsNullOrEmpty(identifier) && identifier.StartsWith('`') && identifier.EndsWith('`');
 		}
 
 		public static string PurgeBackticksEnclosing(string identifier)
@@ -702,7 +803,7 @@ namespace NHibernate.Util
 
 		public static string[] ParseFilterParameterName(string filterParameterName)
 		{
-			int dot = filterParameterName.IndexOf(".");
+			int dot = filterParameterName.IndexOf('.');
 			if (dot <= 0)
 			{
 				throw new ArgumentException("Invalid filter-parameter name format; the name should be a property path.", "filterParameterName");
@@ -710,6 +811,54 @@ namespace NHibernate.Util
 			string filterName = filterParameterName.Substring(0, dot);
 			string parameterName = filterParameterName.Substring(dot + 1);
 			return new[] { filterName, parameterName };
+		}
+
+
+		/// <summary>
+		/// Return the index of the next line separator, starting at startIndex. If will match
+		/// the first CRLF or LF line separator. If there is no match, -1 will be returned. When
+		/// returning, newLineLength will be set to the number of characters in the matched line
+		/// separator (1 if LF was found, 2 if CRLF was found).
+		/// </summary>
+		public static int IndexOfAnyNewLine(this string str, int startIndex, out int newLineLength)
+		{
+			newLineLength = 0;
+			var matchStartIdx = str.IndexOfAny(new[] {'\r', '\n'}, startIndex);
+
+			if (matchStartIdx == -1)
+				return -1;
+
+			if (string.Compare(str, matchStartIdx, "\r\n", 0, 2, StringComparison.OrdinalIgnoreCase) == 0)
+				newLineLength = 2;
+			else
+				newLineLength = 1;
+
+			return matchStartIdx;
+		}
+
+
+		/// <summary>
+		/// Check if the given index points to a line separator in the string. Both CRLF and LF
+		/// line separators are handled. When returning, newLineLength will be set to the number
+		/// of characters matched in the line separator. It will be 2 if a CRLF matched, 1 if LF
+		/// matched, and 0 if the index doesn't indicate (the start of) a line separator.
+		/// </summary>
+		public static bool IsAnyNewLine(this string str, int index, out int newLineLength)
+		{
+			if (string.Compare(str, index, "\r\n", 0, 2, StringComparison.OrdinalIgnoreCase) == 0)
+			{
+				newLineLength = 2;
+				return true;
+			}
+
+			if (index < str.Length && str[index] == '\n')
+			{
+				newLineLength = 1;
+				return true;
+			}
+
+			newLineLength = 0;
+			return false;
 		}
 	}
 }

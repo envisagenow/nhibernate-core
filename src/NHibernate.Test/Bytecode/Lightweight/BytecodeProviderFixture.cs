@@ -2,7 +2,6 @@ using System;
 using NHibernate.Bytecode;
 using NHibernate.Bytecode.Lightweight;
 using NUnit.Framework;
-using SharpTestsEx;
 using Environment=NHibernate.Cfg.Environment;
 
 namespace NHibernate.Test.Bytecode.Lightweight
@@ -15,7 +14,7 @@ namespace NHibernate.Test.Bytecode.Lightweight
 		{
 			var bcp = new BytecodeProviderImpl();
 			IProxyFactoryFactory p = bcp.ProxyFactoryFactory;
-			p.Should().Be.InstanceOf<DefaultProxyFactoryFactory>();
+			Assert.That(p, Is.InstanceOf<StaticProxyFactoryFactory>());
 		}
 
 		[Test]
@@ -29,9 +28,9 @@ namespace NHibernate.Test.Bytecode.Lightweight
 			}
 			catch (HibernateByteCodeException e)
 			{
-				Assert.That(e.Message, Is.StringStarting("Unable to load type"));
-				Assert.That(e.Message, Is.StringContaining("Possible causes"));
-				Assert.That(e.Message, Is.StringContaining("Confirm that your deployment folder contains"));
+				Assert.That(e.Message, Does.StartWith("Unable to load type"));
+				Assert.That(e.Message, Does.Contain("Possible causes"));
+				Assert.That(e.Message, Does.Contain("Confirm that your deployment folder contains"));
 			}
 		}
 
@@ -63,7 +62,7 @@ namespace NHibernate.Test.Bytecode.Lightweight
 			}
 			catch (HibernateByteCodeException e)
 			{
-				Assert.That(e.Message,Is.StringStarting("Failed to create an instance of"));
+				Assert.That(e.Message,Does.StartWith("Failed to create an instance of"));
 			}
 		}
 
@@ -132,8 +131,7 @@ namespace NHibernate.Test.Bytecode.Lightweight
 			// "mapping-sources" is better to limitate the moment of injectability.
 			var cfg = TestConfigurationHelper.GetDefaultConfiguration();
 			cfg.SetProperty(Environment.CollectionTypeFactoryClass, typeof(CustomCollectionTypeFactory).AssemblyQualifiedName);
-			Dialect.Dialect dialect = Dialect.Dialect.GetDialect(cfg.Properties);
-			cfg.CreateMappings(dialect);
+			cfg.CreateMappings();
 			Assert.That(Environment.BytecodeProvider.CollectionTypeFactory, Is.TypeOf<CustomCollectionTypeFactory>());
 		}
 

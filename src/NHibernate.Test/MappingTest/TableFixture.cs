@@ -59,5 +59,14 @@ namespace NHibernate.Test.MappingTest
 
 			Assert.AreEqual("[schema].name", tbl.GetQualifiedName(dialect));
 		}
+
+		[Test]
+		public void NameIsStable()
+		{
+			var tbl = new Table { Name = "name" };
+			Assert.That(
+				Constraint.GenerateName("FK_", tbl, null, new[] {new Column("col1"), new Column("col2")}),
+				Is.EqualTo("FK_3B355A0C"));
+		}
 	}
 }

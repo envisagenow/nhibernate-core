@@ -1,10 +1,10 @@
 using NHibernate.Mapping.ByCode;
 using NHibernate.Mapping.ByCode.Impl;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.ConventionModelMapperTests
 {
+	[TestFixture]
 	public class SafePoidTests
 	{
 		private class MyClassWithoutPoid
@@ -14,7 +14,10 @@ namespace NHibernate.Test.MappingByCode.ConventionModelMapperTests
 
 		private class MyClass
 		{
+			// Assigned by reflection
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 			private int _id;
+#pragma warning restore CS0649 // Field is never assigned to, and will always have its default value
 			public int Id
 			{
 				get { return _id; }
@@ -30,10 +33,10 @@ namespace NHibernate.Test.MappingByCode.ConventionModelMapperTests
 
 			var hbmClass = hbmMapping.RootClasses[0];
 			var hbmId = hbmClass.Id;
-			hbmId.Should().Not.Be.Null();
-			hbmId.generator.Should().Not.Be.Null();
-			hbmId.generator.@class.Should().Be("guid");
-			hbmId.type1.Should().Be("Guid");
+			Assert.That(hbmId, Is.Not.Null);
+			Assert.That(hbmId.generator, Is.Not.Null);
+			Assert.That(hbmId.generator.@class, Is.EqualTo("guid"));
+			Assert.That(hbmId.type1, Is.EqualTo("Guid"));
 		}
 
 		[Test]
@@ -45,10 +48,10 @@ namespace NHibernate.Test.MappingByCode.ConventionModelMapperTests
 
 			var hbmClass = hbmMapping.RootClasses[0];
 			var hbmId = hbmClass.Id;
-			hbmId.Should().Not.Be.Null();
-			hbmId.generator.Should().Not.Be.Null();
-			hbmId.generator.@class.Should().Be("native");
-			hbmId.type1.Should().Be(Generators.Native.DefaultReturnType.GetNhTypeName());
+			Assert.That(hbmId, Is.Not.Null);
+			Assert.That(hbmId.generator, Is.Not.Null);
+			Assert.That(hbmId.generator.@class, Is.EqualTo("native"));
+			Assert.That(hbmId.type1, Is.EqualTo(Generators.Native.DefaultReturnType.GetNhTypeName()));
 		}
 
 		[Test]
@@ -59,7 +62,7 @@ namespace NHibernate.Test.MappingByCode.ConventionModelMapperTests
 			var hbmMapping = mapper.CompileMappingFor(new[] { typeof(MyClass) });
 
 			var hbmClass = hbmMapping.RootClasses[0];
-			hbmClass.Id.access.Should().Be("nosetter.camelcase-underscore");
+			Assert.That(hbmClass.Id.access, Is.EqualTo("nosetter.camelcase-underscore"));
 		}
 	}
 }

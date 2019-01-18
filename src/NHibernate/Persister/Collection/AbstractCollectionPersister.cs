@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -8,7 +9,6 @@ using System.Text;
 using NHibernate.AdoNet;
 using NHibernate.Cache;
 using NHibernate.Cache.Entry;
-using NHibernate.Cfg;
 using NHibernate.Collection;
 using NHibernate.Engine;
 using NHibernate.Exceptions;
@@ -23,15 +23,15 @@ using NHibernate.SqlCommand;
 using NHibernate.SqlTypes;
 using NHibernate.Type;
 using NHibernate.Util;
-using Array=NHibernate.Mapping.Array;
+using Array = NHibernate.Mapping.Array;
 
 namespace NHibernate.Persister.Collection
 {
 	/// <summary>
 	/// Summary description for AbstractCollectionPersister.
 	/// </summary>
-	public abstract class AbstractCollectionPersister : ICollectionMetadata, ISqlLoadableCollection,
-														IPostInsertIdentityPersister
+	public abstract partial class AbstractCollectionPersister : ICollectionMetadata, ISqlLoadableCollection,
+		IPostInsertIdentityPersister, ISupportSelectModeJoinable, ICompositeKeyPostInsertIdentityPersister
 	{
 		protected static readonly object NotFoundPlaceHolder = new object();
 		private readonly string role;
@@ -42,6 +42,8 @@ namespace NHibernate.Persister.Collection
 		private readonly SqlCommandInfo sqlInsertRowString;
 		private readonly SqlCommandInfo sqlUpdateRowString;
 		private readonly SqlCommandInfo sqlDeleteRowString;
+		private readonly ConcurrentDictionary<bool[], SqlCommandInfo> sqlDeleteRowStringByNullness =
+			new ConcurrentDictionary<bool[], SqlCommandInfo>(ArrayHelper.ArrayComparer<bool>.Default);
 		private readonly SqlString sqlSelectRowByIndexString;
 		private readonly SqlString sqlDetectRowByIndexString;
 		private readonly SqlString sqlDetectRowByElementString;
@@ -52,9 +54,6 @@ namespace NHibernate.Persister.Collection
 		private readonly bool hasOrder;
 		private readonly bool hasWhere;
 		private readonly int baseIndex;
-		private readonly string nodeName;
-		private readonly string elementNodeName;
-		private readonly string indexNodeName;
 
 		protected internal bool indexContainsFormula;
 		protected internal bool elementIsPureFormula;
@@ -162,10 +161,9 @@ namespace NHibernate.Persister.Collection
 		private readonly IDictionary<string, object> collectionPropertyColumnAliases = new Dictionary<string, object>();
 		private readonly IDictionary<string, object> collectionPropertyColumnNames = new Dictionary<string, object>();
 
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof (ICollectionPersister));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof (ICollectionPersister));
 
-		public AbstractCollectionPersister(Mapping.Collection collection, ICacheConcurrencyStrategy cache, Configuration cfg,
-										   ISessionFactoryImplementor factory)
+		public AbstractCollectionPersister(Mapping.Collection collection, ICacheConcurrencyStrategy cache, ISessionFactoryImplementor factory)
 		{
 			this.factory = factory;
 			this.cache = cache;
@@ -187,7 +185,6 @@ namespace NHibernate.Persister.Collection
 			entityName = collection.OwnerEntityName;
 			ownerPersister = factory.GetEntityPersister(entityName);
 			queryLoaderName = collection.LoaderName;
-			nodeName = collection.NodeName;
 			isMutable = collection.IsMutable;
 
 			Table table = collection.CollectionTable;
@@ -236,9 +233,10 @@ namespace NHibernate.Persister.Collection
 			foreach (Column col in collection.Key.ColumnIterator)
 			{
 				keyColumnNames[k] = col.GetQuotedName(dialect);
-				keyColumnAliases[k] = col.GetAlias(dialect);
+				keyColumnAliases[k] = col.GetAlias(dialect, table);
 				k++;
 			}
+
 			HashSet<string> distinctColumns = new HashSet<string>();
 			CheckColumnDuplication(distinctColumns, collection.Key.ColumnIterator);
 
@@ -250,22 +248,16 @@ namespace NHibernate.Persister.Collection
 				CheckColumnDuplication(distinctColumns, element.ColumnIterator);
 			}
 
-			string elemNode = collection.ElementNodeName;
 			if (elementType.IsEntityType)
 			{
 				string _entityName = ((EntityType) elementType).GetAssociatedEntityName();
 				elementPersister = factory.GetEntityPersister(_entityName);
-				if (elemNode == null)
-				{
-					elemNode = cfg.GetClassMapping(_entityName).NodeName;
-				}
 				// NativeSQL: collect element column and auto-aliases
 			}
 			else
 			{
 				elementPersister = null;
 			}
-			elementNodeName = elemNode;
 
 			int elementSpan = element.ColumnSpan;
 			elementColumnAliases = new string[elementSpan];
@@ -279,7 +271,7 @@ namespace NHibernate.Persister.Collection
 			int j = 0;
 			foreach (ISelectable selectable in element.ColumnIterator)
 			{
-				elementColumnAliases[j] = selectable.GetAlias(dialect);
+				elementColumnAliases[j] = selectable.GetAlias(dialect, table);
 				if (selectable.IsFormula)
 				{
 					Formula form = (Formula) selectable;
@@ -350,7 +342,6 @@ namespace NHibernate.Persister.Collection
 				indexContainsFormula = hasFormula;
 				baseIndex = indexedCollection.IsList ? ((List) indexedCollection).BaseIndex : 0;
 
-				indexNodeName = indexedCollection.IndexNodeName;
 				CheckColumnDuplication(distinctColumns, indexedCollection.Index.ColumnIterator);
 			}
 			else
@@ -363,7 +354,6 @@ namespace NHibernate.Persister.Collection
 				indexColumnNames = null;
 				indexColumnAliases = null;
 				baseIndex = 0;
-				indexNodeName = null;
 			}
 
 			hasIdentifier = collection.IsIdentified;
@@ -451,7 +441,10 @@ namespace NHibernate.Persister.Collection
 								   ?? ExecuteUpdateResultCheckStyle.DetermineDefault(collection.CustomSQLUpdate, updateCallable);
 			}
 
+			// 6.0 TODO: call GenerateDeleteRowString(null); instead.
+#pragma warning disable 618
 			sqlDeleteRowString = GenerateDeleteRowString();
+#pragma warning restore 618
 			if (collection.CustomSQLDelete == null)
 			{
 				deleteCallable = false;
@@ -542,33 +535,33 @@ namespace NHibernate.Persister.Collection
 		public void PostInstantiate()
 		{
 			initializer = queryLoaderName == null
-							? CreateCollectionInitializer(new CollectionHelper.EmptyMapClass<string, IFilter>())
+							? CreateCollectionInitializer(CollectionHelper.EmptyDictionary<string, IFilter>())
 							: new NamedQueryCollectionInitializer(queryLoaderName, this);
 		}
 
 		protected void LogStaticSQL()
 		{
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
-				log.Debug("Static SQL for collection: " + Role);
+				log.Debug("Static SQL for collection: {0}", Role);
 				if (SqlInsertRowString != null)
 				{
-					log.Debug(" Row insert: " + SqlInsertRowString.Text);
+					log.Debug(" Row insert: {0}", SqlInsertRowString.Text);
 				}
 
 				if (SqlUpdateRowString != null)
 				{
-					log.Debug(" Row update: " + SqlUpdateRowString.Text);
+					log.Debug(" Row update: {0}", SqlUpdateRowString.Text);
 				}
 
 				if (SqlDeleteRowString != null)
 				{
-					log.Debug(" Row delete: " + SqlDeleteRowString.Text);
+					log.Debug(" Row delete: {0}", SqlDeleteRowString.Text);
 				}
 
 				if (SqlDeleteString != null)
 				{
-					log.Debug(" One-shot delete: " + SqlDeleteString.Text);
+					log.Debug(" One-shot delete: {0}", SqlDeleteString.Text);
 				}
 			}
 		}
@@ -645,19 +638,19 @@ namespace NHibernate.Persister.Collection
 
 		public string GetSQLWhereString(string alias)
 		{
-			return StringHelper.Replace(sqlWhereStringTemplate, Template.Placeholder, alias);
+			return sqlWhereStringTemplate?.Replace(Template.Placeholder, alias);
 		}
 
 		public string GetSQLOrderByString(string alias)
 		{
-			return HasOrdering ? StringHelper.Replace(sqlOrderByStringTemplate, Template.Placeholder, alias) : string.Empty;
+			return HasOrdering ? sqlOrderByStringTemplate?.Replace(Template.Placeholder, alias) : string.Empty;
 		}
 
 		public string GetManyToManyOrderByString(string alias)
 		{
 			if (IsManyToMany && manyToManyOrderByString != null)
 			{
-				return StringHelper.Replace(manyToManyOrderByTemplate, Template.Placeholder, alias);
+				return manyToManyOrderByTemplate?.Replace(Template.Placeholder, alias);
 			}
 			else
 			{
@@ -681,16 +674,16 @@ namespace NHibernate.Persister.Collection
 		}
 
 		/// <summary>
-		/// Reads the Element from the IDataReader.  The IDataReader will probably only contain
+		/// Reads the Element from the DbDataReader.  The DbDataReader will probably only contain
 		/// the id of the Element.
 		/// </summary>
 		/// <remarks>See ReadElementIdentifier for an explanation of why this method will be depreciated.</remarks>
-		public object ReadElement(IDataReader rs, object owner, string[] aliases, ISessionImplementor session)
+		public object ReadElement(DbDataReader rs, object owner, string[] aliases, ISessionImplementor session)
 		{
 			return ElementType.NullSafeGet(rs, aliases, session, owner);
 		}
 
-		public object ReadIndex(IDataReader rs, string[] aliases, ISessionImplementor session)
+		public object ReadIndex(DbDataReader rs, string[] aliases, ISessionImplementor session)
 		{
 			object index = IndexType.NullSafeGet(rs, aliases, session, null);
 			if (index == null)
@@ -711,7 +704,7 @@ namespace NHibernate.Persister.Collection
 			return index;
 		}
 
-		public object ReadIdentifier(IDataReader rs, string alias, ISessionImplementor session)
+		public object ReadIdentifier(DbDataReader rs, string alias, ISessionImplementor session)
 		{
 			object id = IdentifierType.NullSafeGet(rs, alias, session, null);
 			if (id == null)
@@ -722,12 +715,12 @@ namespace NHibernate.Persister.Collection
 			return id;
 		}
 
-		public object ReadKey(IDataReader dr, string[] aliases, ISessionImplementor session)
+		public object ReadKey(DbDataReader dr, string[] aliases, ISessionImplementor session)
 		{
 			return KeyType.NullSafeGet(dr, aliases, session, null);
 		}
 
-		protected int WriteKey(IDbCommand st, object id, int i, ISessionImplementor session)
+		protected int WriteKey(DbCommand st, object id, int i, ISessionImplementor session)
 		{
 			if (id == null)
 			{
@@ -738,13 +731,13 @@ namespace NHibernate.Persister.Collection
 			return i + keyColumnAliases.Length;
 		}
 
-		protected int WriteElement(IDbCommand st, object elt, int i, ISessionImplementor session)
+		protected int WriteElement(DbCommand st, object elt, int i, ISessionImplementor session)
 		{
 			ElementType.NullSafeSet(st, elt, i, elementColumnIsSettable, session);
 			return i + ArrayHelper.CountTrue(elementColumnIsSettable);
 		}
 
-		protected int WriteIndex(IDbCommand st, object idx, int i, ISessionImplementor session)
+		protected int WriteIndex(DbCommand st, object idx, int i, ISessionImplementor session)
 		{
 			IndexType.NullSafeSet(st, IncrementIndexByBase(idx), i, indexColumnIsSettable, session);
 			return i + ArrayHelper.CountTrue(indexColumnIsSettable);
@@ -760,18 +753,60 @@ namespace NHibernate.Persister.Collection
 			return index;
 		}
 
-		protected int WriteElementToWhere(IDbCommand st, object elt, int i, ISessionImplementor session)
+		protected int WriteElementToWhere(DbCommand st, object elt, bool[] columnNullness, int i, ISessionImplementor session)
 		{
 			if (elementIsPureFormula)
 			{
 				throw new AssertionFailure("cannot use a formula-based element in the where condition");
 			}
 
-			ElementType.NullSafeSet(st, elt, i, elementColumnIsInPrimaryKey, session);
-			return i + elementColumnAliases.Length;
+			var settable = Combine(elementColumnIsInPrimaryKey, columnNullness);
+
+			ElementType.NullSafeSet(st, elt, i, settable, session);
+			return i + settable.Count(s => s);
 		}
 
-		protected int WriteIndexToWhere(IDbCommand st, object index, int i, ISessionImplementor session)
+		// Since v5.2
+		[Obsolete("Use overload with columnNullness instead")]
+		protected int WriteElementToWhere(DbCommand st, object elt, int i, ISessionImplementor session)
+		{
+			return WriteElementToWhere(st, elt, null, i, session);
+		}
+
+		/// <summary>
+		/// Combine arrays indicating settability and nullness of columns into one, considering null columns as not
+		/// settable.
+		/// </summary>
+		/// <param name="settable">Settable columns. <see langword="null"/> will consider them as all settable.</param>
+		/// <param name="columnNullness">Nullness of columns.  <see langword="null"/> will consider them as all
+		/// non-null. <see langword="true" /> indicates a non-null column, <see langword="false" /> indicates a null
+		/// column.</param>
+		/// <returns>The resulting settability of columns, or <see langword="null"/> if both argument are
+		/// <see langword="null"/>.</returns>
+		/// <exception cref="InvalidOperationException">thrown if <paramref name="settable"/> and
+		/// <paramref name="columnNullness"/> have inconsistent lengthes.</exception>
+		protected static bool[] Combine(bool[] settable, bool[] columnNullness)
+		{
+			if (columnNullness == null)
+				return settable;
+			if (settable == null)
+				return columnNullness;
+
+			if (columnNullness.Length != settable.Length)
+				throw new InvalidOperationException("Inconsistent nullness and settable columns lengthes");
+
+			var result = new bool[settable.Length];
+			for (var idx = 0; idx < settable.Length; idx++)
+			{
+				result[idx] = columnNullness[idx] && settable[idx];
+			}
+
+			return result;
+		}
+
+		// No column nullness handling here: although a composite index could have null columns, the mapping
+		// current implementation forbirds this by forcing not-null to true on all columns.
+		protected int WriteIndexToWhere(DbCommand st, object index, int i, ISessionImplementor session)
 		{
 			if (indexContainsFormula)
 			{
@@ -782,7 +817,7 @@ namespace NHibernate.Persister.Collection
 			return i + indexColumnAliases.Length;
 		}
 
-		protected int WriteIdentifier(IDbCommand st, object idx, int i, ISessionImplementor session)
+		protected int WriteIdentifier(DbCommand st, object idx, int i, ISessionImplementor session)
 		{
 			IdentifierType.NullSafeSet(st, idx, i, session);
 			return i + 1;
@@ -831,23 +866,25 @@ namespace NHibernate.Persister.Collection
 
 			return frag.ToSqlStringFragment(false);
 		}
-		private SqlString AddWhereFragment(SqlString sql)
+
+		private void AddWhereFragment(SqlSimpleSelectBuilder sql)
 		{
 			if (!hasWhere)
-				return sql;
-			return sql.Append(" and ").Append(sqlWhereString);
+				return;
+			sql.AddWhereFragment(sqlWhereString);
 		}
 
 		private SqlString GenerateSelectSizeString(ISessionImplementor sessionImplementor)
 		{
-			string selectValue = GetCountSqlSelectClause();
+			var selectValue = GetCountSqlSelectClause();
 
-			return new SqlSimpleSelectBuilder(dialect, factory)
-				.SetTableName(TableName)
-				.AddWhereFragment(KeyColumnNames, KeyType, "=")
-				.AddColumn(selectValue)
-				.ToSqlString()
-				.Append(FilterFragment(TableName, sessionImplementor.EnabledFilters));
+			return
+				new SqlSimpleSelectBuilder(dialect, factory)
+					.SetTableName(TableName)
+					.AddWhereFragment(KeyColumnNames, KeyType, "=")
+					.AddWhereFragment(FilterFragment(TableName, sessionImplementor.EnabledFilters))
+					.AddColumn(selectValue)
+					.ToSqlString();
 		}
 
 		protected virtual string GetCountSqlSelectClause()
@@ -871,14 +908,15 @@ namespace NHibernate.Persister.Collection
 			}
 
 			// TODO NH: may be we need something else when Index is mixed with Formula
-			var sqlString=
+			var builder =
 				new SqlSimpleSelectBuilder(dialect, factory)
 					.SetTableName(TableName)
 					.AddWhereFragment(KeyColumnNames, KeyType, "=")
 					.AddWhereFragment(IndexColumnNames, IndexType, "=")
 					.AddWhereFragment(indexFormulas, IndexType, "=")
-					.AddColumn("1").ToSqlString();
-			return AddWhereFragment(sqlString);
+					.AddColumn("1");
+			AddWhereFragment(builder);
+			return builder.ToSqlString();
 		}
 
 		private SqlString GenerateSelectRowByIndexString()
@@ -888,26 +926,29 @@ namespace NHibernate.Persister.Collection
 				return null;
 			}
 
-			var sqlString=new SqlSimpleSelectBuilder(dialect, factory)
-				.SetTableName(TableName)
-				.AddWhereFragment(KeyColumnNames, KeyType, "=")
-				.AddWhereFragment(IndexColumnNames, IndexType, "=")
-				.AddWhereFragment(indexFormulas, IndexType, "=")
-				.AddColumns(ElementColumnNames, elementColumnAliases)
-				.AddColumns(indexFormulas, indexColumnAliases).ToSqlString();
-			return AddWhereFragment(sqlString);
+			var builder =
+				new SqlSimpleSelectBuilder(dialect, factory)
+					.SetTableName(TableName)
+					.AddWhereFragment(KeyColumnNames, KeyType, "=")
+					.AddWhereFragment(IndexColumnNames, IndexType, "=")
+					.AddWhereFragment(indexFormulas, IndexType, "=")
+					.AddColumns(ElementColumnNames, elementColumnAliases)
+					.AddColumns(indexFormulas, indexColumnAliases);
+			AddWhereFragment(builder);
+			return builder.ToSqlString();
 		}
 
 		private SqlString GenerateDetectRowByElementString()
 		{
-			var sqlString=
+			var builder =
 				new SqlSimpleSelectBuilder(dialect, factory)
-				.SetTableName(TableName)
-				.AddWhereFragment(KeyColumnNames, KeyType, "=")
-				.AddWhereFragment(ElementColumnNames, ElementType, "=")
-				.AddWhereFragment(elementFormulas, ElementType, "=")
-				.AddColumn("1").ToSqlString();
-			return AddWhereFragment(sqlString);
+					.SetTableName(TableName)
+					.AddWhereFragment(KeyColumnNames, KeyType, "=")
+					.AddWhereFragment(ElementColumnNames, ElementType, "=")
+					.AddWhereFragment(elementFormulas, ElementType, "=")
+					.AddColumn("1");
+			AddWhereFragment(builder);
+			return builder.ToSqlString();
 		}
 
 		protected virtual SelectFragment GenerateSelectFragment(string alias, string columnSuffix)
@@ -979,7 +1020,7 @@ namespace NHibernate.Persister.Collection
 			{
 				if (columnNames[i] == null)
 				{
-					result[i] = StringHelper.Replace(formulaTemplates[i], Template.Placeholder, alias);
+					result[i] = formulaTemplates[i]?.Replace(Template.Placeholder, alias);
 				}
 				else
 				{
@@ -1008,9 +1049,9 @@ namespace NHibernate.Persister.Collection
 		{
 			if (!isInverse && RowDeleteEnabled)
 			{
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug("Deleting collection: " + MessageHelper.InfoString(this, id, Factory));
+					log.Debug("Deleting collection: {0}", MessageHelper.CollectionInfoString(this, id, Factory));
 				}
 
 				// Remove all the old entries
@@ -1020,11 +1061,9 @@ namespace NHibernate.Persister.Collection
 					IExpectation expectation = Expectations.AppropriateExpectation(DeleteAllCheckStyle);
 					//bool callable = DeleteAllCallable;
 					bool useBatch = expectation.CanBeBatched;
-					IDbCommand st = useBatch
-										? session.Batcher.PrepareBatchCommand(SqlDeleteString.CommandType, SqlDeleteString.Text,
-																			  SqlDeleteString.ParameterTypes)
-										: session.Batcher.PrepareCommand(SqlDeleteString.CommandType, SqlDeleteString.Text,
-																		 SqlDeleteString.ParameterTypes);
+					var st = useBatch
+						? session.Batcher.PrepareBatchCommand(SqlDeleteString.CommandType, SqlDeleteString.Text, SqlDeleteString.ParameterTypes)
+						: session.Batcher.PrepareCommand(SqlDeleteString.CommandType, SqlDeleteString.Text, SqlDeleteString.ParameterTypes);
 
 					try
 					{
@@ -1055,7 +1094,7 @@ namespace NHibernate.Persister.Collection
 						}
 					}
 
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
 						log.Debug("done deleting collection");
 					}
@@ -1063,7 +1102,7 @@ namespace NHibernate.Persister.Collection
 				catch (DbException sqle)
 				{
 					throw ADOExceptionHelper.Convert(sqlExceptionConverter, sqle,
-													 "could not delete collection: " + MessageHelper.InfoString(this, id));
+													 "could not delete collection: " + MessageHelper.CollectionInfoString(this, id));
 				}
 			}
 		}
@@ -1072,9 +1111,9 @@ namespace NHibernate.Persister.Collection
 		{
 			if (!isInverse && RowInsertEnabled)
 			{
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug("Inserting collection: " + MessageHelper.InfoString(this, id));
+					log.Debug("Inserting collection: {0}", MessageHelper.CollectionInfoString(this, collection, id, session));
 				}
 
 				try
@@ -1085,8 +1124,7 @@ namespace NHibernate.Persister.Collection
 					int count = 0;
 
 					// create all the new entries
-					IEnumerator entries = collection.Entries(this).GetEnumerator();
-					while (entries.MoveNext())
+					foreach (var entry in collection.Entries(this))
 					{
 						// Init, if we're on the first element.
 						if (count == 0)
@@ -1096,8 +1134,7 @@ namespace NHibernate.Persister.Collection
 							//bool callable = InsertCallable;
 							useBatch = expectation.CanBeBatched;
 						}
-
-						object entry = entries.Current;
+						
 						if (collection.EntryExists(entry, i))
 						{
 							object entryId;
@@ -1116,10 +1153,10 @@ namespace NHibernate.Persister.Collection
 						i++;
 					}
 
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
 						if (count > 0)
-							log.Debug(string.Format("done inserting collection: {0} rows inserted", count));
+							log.Debug("done inserting collection: {0} rows inserted", count);
 						else
 							log.Debug("collection was empty");
 					}
@@ -1127,7 +1164,7 @@ namespace NHibernate.Persister.Collection
 				catch (DbException sqle)
 				{
 					throw ADOExceptionHelper.Convert(sqlExceptionConverter, sqle,
-													 "could not insert collection: " + MessageHelper.InfoString(this, id));
+													 "could not insert collection: " + MessageHelper.CollectionInfoString(this, collection, id, session));
 				}
 			}
 		}
@@ -1136,9 +1173,9 @@ namespace NHibernate.Persister.Collection
 		{
 			if (!isInverse && RowDeleteEnabled)
 			{
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug("Deleting rows of collection: " + MessageHelper.InfoString(this, id));
+					log.Debug("Deleting rows of collection: {0}", MessageHelper.CollectionInfoString(this, collection, id, session));
 				}
 
 				bool deleteByIndex = !IsOneToMany && hasIndex && !indexContainsFormula;
@@ -1146,108 +1183,117 @@ namespace NHibernate.Persister.Collection
 				try
 				{
 					// delete all the deleted entries
-					IEnumerator deletes = collection.GetDeletes(this, !deleteByIndex).GetEnumerator();
-					if (deletes.MoveNext())
+					var offset = 0;
+					var count = 0;
+
+					foreach (var entry in collection.GetDeletes(this, !deleteByIndex))
 					{
-						deletes.Reset();
-						int offset = 0;
-						int count = 0;
+						DbCommand st;
+						var expectation = Expectations.AppropriateExpectation(deleteCheckStyle);
+						//var callable = DeleteCallable;
+						var commandInfo = GetDeleteCommand(deleteByIndex, entry, out var columnNullness);
 
-						while (deletes.MoveNext())
+						var useBatch = expectation.CanBeBatched;
+						if (useBatch)
 						{
-							IDbCommand st;
-							IExpectation expectation = Expectations.AppropriateExpectation(deleteCheckStyle);
-							//bool callable = DeleteCallable;
-
-							bool useBatch = expectation.CanBeBatched;
-							if (useBatch)
+							st = session.Batcher.PrepareBatchCommand(
+								commandInfo.CommandType, commandInfo.Text, commandInfo.ParameterTypes);
+						}
+						else
+						{
+							st = session.Batcher.PrepareCommand(
+								commandInfo.CommandType, commandInfo.Text, commandInfo.ParameterTypes);
+						}
+						try
+						{
+							var loc = offset;
+							if (hasIdentifier)
 							{
-								st =
-									session.Batcher.PrepareBatchCommand(SqlDeleteRowString.CommandType, SqlDeleteRowString.Text,
-																		SqlDeleteRowString.ParameterTypes);
+								WriteIdentifier(st, entry, loc, session);
 							}
 							else
 							{
-								st =
-									session.Batcher.PrepareCommand(SqlDeleteRowString.CommandType, SqlDeleteRowString.Text,
-																   SqlDeleteRowString.ParameterTypes);
-							}
-							try
-							{
-								object entry = deletes.Current;
-								int loc = offset;
-								if (hasIdentifier)
-								{
-									WriteIdentifier(st, entry, loc, session);
-								}
-								else
-								{
-									loc = WriteKey(st, id, loc, session);
+								loc = WriteKey(st, id, loc, session);
 
-									if (deleteByIndex)
-									{
-										WriteIndexToWhere(st, entry, loc, session);
-									}
-									else
-									{
-										WriteElementToWhere(st, entry, loc, session);
-									}
-								}
-								if (useBatch)
+								if (deleteByIndex)
 								{
-									session.Batcher.AddToBatch(expectation);
+									WriteIndexToWhere(st, entry, loc, session);
 								}
 								else
 								{
-									expectation.VerifyOutcomeNonBatched(session.Batcher.ExecuteNonQuery(st), st);
+									WriteElementToWhere(st, entry, columnNullness, loc, session);
 								}
-								count++;
 							}
-							catch (Exception e)
+							if (useBatch)
 							{
-								if (useBatch)
-								{
-									session.Batcher.AbortBatch(e);
-								}
-								throw;
+								session.Batcher.AddToBatch(expectation);
 							}
-							finally
+							else
 							{
-								if (!useBatch)
-								{
-									session.Batcher.CloseCommand(st, null);
-								}
+								expectation.VerifyOutcomeNonBatched(session.Batcher.ExecuteNonQuery(st), st);
 							}
+							count++;
 						}
-
-						if (log.IsDebugEnabled)
+						catch (Exception e)
 						{
-							log.Debug("done deleting collection rows: " + count + " deleted");
+							if (useBatch)
+							{
+								session.Batcher.AbortBatch(e);
+							}
+							throw;
+						}
+						finally
+						{
+							if (!useBatch)
+							{
+								session.Batcher.CloseCommand(st, null);
+							}
 						}
 					}
-					else
+
+					if (log.IsDebugEnabled())
 					{
-						if (log.IsDebugEnabled)
-						{
+						if (count > 0)
+							log.Debug("done deleting collection rows: {0} deleted", count);
+						else
 							log.Debug("no rows to delete");
-						}
 					}
 				}
 				catch (DbException sqle)
 				{
 					throw ADOExceptionHelper.Convert(sqlExceptionConverter, sqle,
-													 "could not delete collection rows: " + MessageHelper.InfoString(this, id));
+						"could not delete collection rows: " + MessageHelper.CollectionInfoString(this, collection, id, session));
 				}
 			}
+		}
+
+		private SqlCommandInfo GetDeleteCommand(bool deleteByIndex, object entry, out bool[] columnNullness)
+		{
+			var commandInfo = SqlDeleteRowString;
+			columnNullness = null;
+			// No column nullness handling if deleteByIndex: although a composite index could have null columns, the
+			// mapping current implementation forbirds this by forcing not-null to true on all columns.
+			if (!hasIdentifier && !deleteByIndex)
+			{
+				columnNullness = ElementType.ToColumnNullness(entry, Factory);
+				if (columnNullness.Any(cn => !cn))
+					commandInfo = sqlDeleteRowStringByNullness.GetOrAdd(
+						columnNullness,
+						GenerateDeleteRowString);
+				else
+					columnNullness = null;
+			}
+
+			return commandInfo;
 		}
 
 		public void InsertRows(IPersistentCollection collection, object id, ISessionImplementor session)
 		{
 			if (!isInverse && RowInsertEnabled)
 			{
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug("Inserting rows of collection: " + MessageHelper.InfoString(this, id, Factory));
+					log.Debug("Inserting rows of collection: {0}", MessageHelper.CollectionInfoString(this, collection, id, session));
 				}
 
 				try
@@ -1281,15 +1327,15 @@ namespace NHibernate.Persister.Collection
 						i++;
 					}
 
-					if (log.IsDebugEnabled)
+					if (log.IsDebugEnabled())
 					{
-						log.Debug(string.Format("done inserting rows: {0} inserted", count));
+						log.Debug("done inserting rows: {0} inserted", count);
 					}
 				}
 				catch (DbException sqle)
 				{
 					throw ADOExceptionHelper.Convert(sqlExceptionConverter, sqle,
-													 "could not insert collection rows: " + MessageHelper.InfoString(this, id));
+													 "could not insert collection rows: " + MessageHelper.CollectionInfoString(this, collection, id, session));
 				}
 			}
 		}
@@ -1329,7 +1375,7 @@ namespace NHibernate.Persister.Collection
 
 			if (manyToManyWhereString != null)
 			{
-				buffer.Append(" and ").Append(StringHelper.Replace(manyToManyWhereTemplate, Template.Placeholder, alias));
+				buffer.Append(" and ").Append(manyToManyWhereTemplate?.Replace(Template.Placeholder, alias));
 			}
 
 			return buffer.ToString();
@@ -1365,26 +1411,50 @@ namespace NHibernate.Persister.Collection
 		}
 
 		protected abstract SqlCommandInfo GenerateDeleteString();
-		protected abstract SqlCommandInfo GenerateDeleteRowString();
+		// No column nullness handling here: updates currently only occur on cases not allowing null.
 		protected abstract SqlCommandInfo GenerateUpdateRowString();
 		protected abstract SqlCommandInfo GenerateInsertRowString();
 		protected abstract SqlCommandInfo GenerateIdentityInsertRowString();
+
+		/// <summary>
+		/// Generate the SQL <c>delete</c> that deletes a particular row.
+		/// </summary>
+		/// <returns>A SQL <c>delete</c>.</returns>
+		// Since v5.2
+		[Obsolete("Use or override overload with columnNullness instead")]
+		protected virtual SqlCommandInfo GenerateDeleteRowString()
+		{
+			return GenerateDeleteRowString(null);
+		}
+
+		/// <summary>
+		/// Generate the SQL <c>delete</c> that deletes a particular row.
+		/// </summary>
+		/// <param name="columnNullness">If non-null, an array of boolean indicating which mapped columns of the index
+		/// or element would be null. <see langword="true" /> indicates a non-null column, <see langword="false" />
+		/// indicates a null column.</param>
+		/// <returns>A SQL <c>delete</c>.</returns>
+		// 6.0 TODO: make abstract
+		protected virtual SqlCommandInfo GenerateDeleteRowString(bool[] columnNullness)
+		{
+			throw new NotSupportedException($"{GetType().FullName} does not support queries handling nullness.");
+		}
 
 		public void UpdateRows(IPersistentCollection collection, object id, ISessionImplementor session)
 		{
 			if (!isInverse && collection.RowUpdatePossible)
 			{
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug(string.Format("Updating rows of collection: {0}#{1}", role, id));
+					log.Debug("Updating rows of collection: {0}#{1}", role, id);
 				}
 
 				// update all the modified entries
 				int count = DoUpdateRows(id, collection, session);
 
-				if (log.IsDebugEnabled)
+				if (log.IsDebugEnabled())
 				{
-					log.Debug(string.Format("done updating rows: {0} updated", count));
+					log.Debug("done updating rows: {0} updated", count);
 				}
 			}
 		}
@@ -1509,16 +1579,16 @@ namespace NHibernate.Persister.Collection
 
 		public int GetSize(object key, ISessionImplementor session)
 		{
-			using(new SessionIdLoggingContext(session.SessionId))
+			using (session.BeginProcess())
 			try
 			{
 				if(session.EnabledFilters.Count > 0)
 				{
-					
+					// The above call validates the filters
 				}
 
-				IDbCommand st = session.Batcher.PrepareCommand(CommandType.Text, GenerateSelectSizeString(session), KeyType.SqlTypes(factory));
-				IDataReader rs = null;
+				var st = session.Batcher.PrepareCommand(CommandType.Text, GenerateSelectSizeString(session), KeyType.SqlTypes(factory));
+				DbDataReader rs = null;
 				try
 				{
 					KeyType.NullSafeSet(st, key, 0, session);
@@ -1534,7 +1604,7 @@ namespace NHibernate.Persister.Collection
 			{
 				throw ADOExceptionHelper.Convert(Factory.SQLExceptionConverter, sqle,
 												 "could not retrieve collection size: "
-												 + MessageHelper.InfoString(this, key, Factory), GenerateSelectSizeString(session));
+												 + MessageHelper.CollectionInfoString(this, key, Factory), GenerateSelectSizeString(session));
 			}
 		}
 
@@ -1551,13 +1621,13 @@ namespace NHibernate.Persister.Collection
 		private bool Exists(object key, object indexOrElement, IType indexOrElementType, SqlString sql,
 							ISessionImplementor session)
 		{
-			using(new SessionIdLoggingContext(session.SessionId))
+			using (session.BeginProcess())
 			try
 			{
 				List<SqlType> sqlTl = new List<SqlType>(KeyType.SqlTypes(factory));
 				sqlTl.AddRange(indexOrElementType.SqlTypes(factory));
-				IDbCommand st = session.Batcher.PrepareCommand(CommandType.Text, sql, sqlTl.ToArray());
-				IDataReader rs = null;
+				var st = session.Batcher.PrepareCommand(CommandType.Text, sql, sqlTl.ToArray());
+				DbDataReader rs = null;
 				try
 				{
 					KeyType.NullSafeSet(st, key, 0, session);
@@ -1584,20 +1654,20 @@ namespace NHibernate.Persister.Collection
 			catch (DbException sqle)
 			{
 				throw ADOExceptionHelper.Convert(Factory.SQLExceptionConverter, sqle,
-												 "could not check row existence: " + MessageHelper.InfoString(this, key, Factory),
+												 "could not check row existence: " + MessageHelper.CollectionInfoString(this, key, Factory),
 												 GenerateSelectSizeString(session));
 			}
 		}
 
 		public virtual object GetElementByIndex(object key, object index, ISessionImplementor session, object owner)
 		{
-			using(new SessionIdLoggingContext(session.SessionId))
+			using (session.BeginProcess())
 			try
 			{
 				List<SqlType> sqlTl = new List<SqlType>(KeyType.SqlTypes(factory));
 				sqlTl.AddRange(IndexType.SqlTypes(factory));
-				IDbCommand st = session.Batcher.PrepareCommand(CommandType.Text, sqlSelectRowByIndexString, sqlTl.ToArray());
-				IDataReader rs = null;
+				var st = session.Batcher.PrepareCommand(CommandType.Text, sqlSelectRowByIndexString, sqlTl.ToArray());
+				DbDataReader rs = null;
 				try
 				{
 					KeyType.NullSafeSet(st, key, 0, session);
@@ -1627,7 +1697,7 @@ namespace NHibernate.Persister.Collection
 			catch (DbException sqle)
 			{
 				throw ADOExceptionHelper.Convert(Factory.SQLExceptionConverter, sqle,
-												 "could not read row: " + MessageHelper.InfoString(this, key, Factory),
+												 "could not read row: " + MessageHelper.CollectionInfoString(this, key, Factory),
 												 GenerateSelectSizeString(session));
 			}
 		}
@@ -1643,8 +1713,40 @@ namespace NHibernate.Persister.Collection
 
 		public abstract SqlString WhereJoinFragment(string alias, bool innerJoin, bool includeSubclasses);
 
-		public abstract string SelectFragment(IJoinable rhs, string rhsAlias, string lhsAlias, string currentEntitySuffix,
-											  string currentCollectionSuffix, bool includeCollectionColumns);
+		// 6.0 TODO: Remove (Replace with ISupportSelectModeJoinable.SelectFragment)
+		// Since v5.2
+		[Obsolete("Use overload taking includeLazyProperties parameter")]
+		public virtual string SelectFragment(
+			IJoinable rhs,
+			string rhsAlias,
+			string lhsAlias,
+			string currentEntitySuffix,
+			string currentCollectionSuffix,
+			bool includeCollectionColumns)
+		{
+			return SelectFragment(
+				rhs, rhsAlias, lhsAlias, currentEntitySuffix, currentCollectionSuffix, includeCollectionColumns, false);
+		}
+
+		// 6.0 TODO: Make abstract
+		public virtual string SelectFragment(
+			IJoinable rhs, string rhsAlias, string lhsAlias, string entitySuffix, string collectionSuffix,
+			bool includeCollectionColumns, bool includeLazyProperties)
+		{
+			throw new NotImplementedException("SelectFragment with fetching lazy properties option is not implemented by " + GetType().FullName);
+		}
+
+		/// <summary>
+		/// Given a query alias and an identifying suffix, render the identifier select fragment for collection element entity.
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="suffix"></param>
+		/// <returns></returns>
+		public virtual string IdentifierSelectFragment(string name, string suffix)
+		{
+			var persister = ReflectHelper.CastOrThrow<ISupportSelectModeJoinable>(ElementPersister, "SelectMode.ChildFetch for collection");
+			return persister.IdentifierSelectFragment(name, suffix);
+		}
 
 		public abstract bool ConsumesCollectionAlias();
 
@@ -1759,6 +1861,13 @@ namespace NHibernate.Persister.Collection
 		}
 
 		public string[] KeyColumnNames
+		{
+			get { return keyColumnNames; }
+		}
+
+		// Since v5.2
+		[Obsolete("Use KeyColumnNames instead")]
+		public string[] JoinColumnNames
 		{
 			get { return keyColumnNames; }
 		}
@@ -1907,21 +2016,6 @@ namespace NHibernate.Persister.Collection
 			get { return isVersioned && OwnerEntityPersister.IsVersioned; }
 		}
 
-		public string NodeName
-		{
-			get { return nodeName; }
-		}
-
-		public string ElementNodeName
-		{
-			get { return elementNodeName; }
-		}
-
-		public string IndexNodeName
-		{
-			get { return indexNodeName; }
-		}
-
 		protected virtual ISQLExceptionConverter SQLExceptionConverter
 		{
 			get { return sqlExceptionConverter; }
@@ -1955,16 +2049,21 @@ namespace NHibernate.Persister.Collection
 		public abstract bool CascadeDeleteEnabled { get; }
 		public abstract bool IsOneToMany { get; }
 
+		// Since v5.2
+		[Obsolete("Use directly the alias parameter value instead")]
+		public virtual string GenerateTableAliasForKeyColumns(string alias)
+		{
+			return alias;
+		}
+
 		protected object PerformInsert(object ownerId, IPersistentCollection collection, IExpectation expectation,
 									   object entry, int index, bool useBatch, bool callable, ISessionImplementor session)
 		{
 			object entryId = null;
 			int offset = 0;
-			IDbCommand st = useBatch
-								? session.Batcher.PrepareBatchCommand(SqlInsertRowString.CommandType, SqlInsertRowString.Text,
-																	  SqlInsertRowString.ParameterTypes)
-								: session.Batcher.PrepareCommand(SqlInsertRowString.CommandType, SqlInsertRowString.Text,
-																 SqlInsertRowString.ParameterTypes);
+			var st = useBatch
+				? session.Batcher.PrepareBatchCommand(SqlInsertRowString.CommandType, SqlInsertRowString.Text, SqlInsertRowString.ParameterTypes)
+				: session.Batcher.PrepareCommand(SqlInsertRowString.CommandType, SqlInsertRowString.Text, SqlInsertRowString.ParameterTypes);
 			try
 			{
 				//offset += expectation.Prepare(st, factory.ConnectionProvider.Driver);
@@ -2047,16 +2146,53 @@ namespace NHibernate.Persister.Collection
 			get { return new string[] {IdentifierColumnName}; }
 		}
 
+		/// <summary>
+		/// Get the batch size of a collection persister.
+		/// </summary>
+		public int GetBatchSize()
+		{
+			return batchSize;
+		}
+
+		// Since 5.2
+		[Obsolete("Use GetSelectByUniqueKeyString(string[] suppliedPropertyNames, out IType[] parameterTypes) instead.")]
 		public SqlString GetSelectByUniqueKeyString(string propertyName)
 		{
-			return
-				new SqlSimpleSelectBuilder(Factory.Dialect, Factory).SetTableName(qualifiedTableName).AddColumns(KeyColumnNames).
-					AddWhereFragment(KeyColumnNames, KeyType, " = ").ToSqlString();
+			return GetSelectByUniqueKeyString(null, out _);
+		}
+
+		public virtual SqlString GetSelectByUniqueKeyString(string[] suppliedPropertyNames, out IType[] parameterTypes)
+		{
+			if (suppliedPropertyNames != null)
+				throw new NotSupportedException("Collections does not support custom property names for selecting by unique key");
+
+			parameterTypes = HasIndex ?  new[] { KeyType, IndexType, ElementType } : new[] { KeyType, ElementType };
+			var builder =
+				new SqlSimpleSelectBuilder(Factory.Dialect, Factory)
+					.SetTableName(qualifiedTableName)
+					.AddColumns(new[] {identifierColumnName})
+					.AddWhereFragment(KeyColumnNames, KeyType, " = ");
+
+			if (HasIndex)
+				builder.AddWhereFragment(IndexColumnNames, IndexType, " = ");
+
+			return builder
+				.AddWhereFragment(ElementColumnNames, ElementType, " = ")
+				.ToSqlString();
+		}
+
+		public void BindSelectByUniqueKey(
+			ISessionImplementor session,
+			DbCommand selectCommand,
+			IBinder binder,
+			string[] suppliedPropertyNames)
+		{
+			binder.BindValues(selectCommand);
 		}
 
 		public string GetInfoString()
 		{
-			return MessageHelper.InfoString(this, null);
+			return MessageHelper.CollectionInfoString(this, null);
 		}
 		#endregion
 
@@ -2074,7 +2210,7 @@ namespace NHibernate.Persister.Collection
 			return identityDelegate.PerformInsert(SqlInsertRowString, session, binder);
 		}
 
-		protected class GeneratedIdentifierBinder : IBinder
+		protected partial class GeneratedIdentifierBinder : IBinder
 		{
 			private readonly object ownerId;
 			private readonly IPersistentCollection collection;
@@ -2099,7 +2235,7 @@ namespace NHibernate.Persister.Collection
 				get { return entry; }
 			}
 
-			public void BindValues(IDbCommand cm)
+			public void BindValues(DbCommand cm)
 			{
 				int offset = 0;
 				offset = persister.WriteKey(cm, ownerId, offset, session);

@@ -10,34 +10,14 @@ using NHibernate.Util;
 
 namespace NHibernate
 {
-	using System.Collections.Generic;
-	using System.Reflection;
-
 	/// <summary>
 	/// Provides access to the full range of NHibernate built-in types.
 	/// IType instances may be used to bind values to query parameters.
-	/// Also a factory for new Blobs and Clobs.
+	/// <see cref="TypeFactory" /> if needing to specify type size,
+	/// precision or scale.
 	/// </summary>
-	public static class NHibernateUtil
+	public static partial class NHibernateUtil
 	{
-		static private readonly Dictionary<System.Type, IType> clrTypeToNHibernateType = new Dictionary<System.Type, IType>();
-
-		static NHibernateUtil()
-		{
-			FieldInfo[] fields = typeof(NHibernateUtil).GetFields();
-			foreach (FieldInfo info in fields)
-			{
-				if (typeof(IType).IsAssignableFrom(info.FieldType) == false)
-					continue;
-				IType type = (IType)info.GetValue(null);
-				clrTypeToNHibernateType[type.ReturnedClass] = type;
-			}
-
-			// There are multiple possibilites for boolean. Override so that we
-			// use the most natural mapping.
-			clrTypeToNHibernateType[Boolean.ReturnedClass] = Boolean;
-		}
-
 		/// <summary>
 		/// Guesses the IType of this object
 		/// </summary>
@@ -58,8 +38,8 @@ namespace NHibernate
 		{
 			type = type.UnwrapIfNullable();
 
-			IType value;
-			if (clrTypeToNHibernateType.TryGetValue(type, out value))
+			var value = TypeFactory.GetDefaultTypeFor(type);
+			if (value != null)
 				return value;
 			
 			if (type.IsEnum)
@@ -70,7 +50,7 @@ namespace NHibernate
 			{
 				return Custom(type);
 			}
-			
+
 			return Entity(type);
 		}
 
@@ -110,27 +90,45 @@ namespace NHibernate
 		public static readonly CultureInfoType CultureInfo = new CultureInfoType();
 
 		/// <summary>
-		/// NHibernate date type
+		/// NHibernate date time type. Since v5.0, does no more cut fractional seconds.
 		/// </summary>
+		/// <remarks>Use <see cref="DateTimeNoMs" /> if needing cutting milliseconds.</remarks>
 		public static readonly DateTimeType DateTime = new DateTimeType();
 
 		/// <summary>
-		/// NHibernate date type
+		/// NHibernate date time cutting milliseconds type
 		/// </summary>
+		public static readonly DateTimeNoMsType DateTimeNoMs = new DateTimeNoMsType();
+
+		// Obsolete since v5.0
+		/// <summary>
+		/// NHibernate date time 2 type
+		/// </summary>
+		[Obsolete("Use DateTimeType instead, it uses DateTime2 with dialects supporting it.")]
 		public static readonly DateTime2Type DateTime2 = new DateTime2Type();
 
 		/// <summary>
-		/// NHibernate local date type
+		/// NHibernate local date time type
 		/// </summary>
 		public static readonly LocalDateTimeType LocalDateTime = new LocalDateTimeType();
 
 		/// <summary>
-		/// NHibernate utc date type
+		/// NHibernate utc date time type
 		/// </summary>
 		public static readonly UtcDateTimeType UtcDateTime = new UtcDateTimeType();
 
 		/// <summary>
-		/// NHibernate date type
+		/// NHibernate local date time cutting milliseconds type
+		/// </summary>
+		public static readonly LocalDateTimeNoMsType LocalDateTimeNoMs = new LocalDateTimeNoMsType();
+
+		/// <summary>
+		/// NHibernate utc date time cutting milliseconds type
+		/// </summary>
+		public static readonly UtcDateTimeNoMsType UtcDateTimeNoMs = new UtcDateTimeNoMsType();
+
+		/// <summary>
+		/// NHibernate date time with offset type
 		/// </summary>
 		public static readonly DateTimeOffsetType DateTimeOffset = new DateTimeOffsetType();
 
@@ -220,21 +218,36 @@ namespace NHibernate
 		public static readonly TicksType Ticks = new TicksType();
 
 		/// <summary>
-		/// NHibernate Ticks type
+		/// NHibernate UTC Ticks type
+		/// </summary>
+		public static readonly UtcTicksType UtcTicks = new UtcTicksType();
+
+		/// <summary>
+		/// NHibernate TimeAsTimeSpan type
 		/// </summary>
 		public static readonly TimeAsTimeSpanType TimeAsTimeSpan = new TimeAsTimeSpanType();
 
 		/// <summary>
-		/// NHibernate Ticks type
+		/// NHibernate TimeSpan type
 		/// </summary>
 		public static readonly TimeSpanType TimeSpan = new TimeSpanType();
 
+		// Obsolete since v5.0
 		/// <summary>
 		/// NHibernate Timestamp type
 		/// </summary>
+		[Obsolete("Use DateTime instead.")]
 		public static readonly TimestampType Timestamp = new TimestampType();
 
+		/// <summary>
+		/// NHibernate Timestamp type, seeded db side.
+		/// </summary>
 		public static readonly DbTimestampType DbTimestamp = new DbTimestampType();
+
+		/// <summary>
+		/// NHibernate Timestamp type, seeded db side, in UTC.
+		/// </summary>
+		public static readonly UtcDbTimestampType UtcDbTimestamp = new UtcDbTimestampType();
 
 		/// <summary>
 		/// NHibernate TrueFalse type
@@ -255,7 +268,14 @@ namespace NHibernate
 		/// NHibernate class meta type for association of kind <code>any</code>.
 		/// </summary>
 		/// <seealso cref="AnyType"/>
+		[Obsolete("Use MetaType without meta-values instead.")]
 		public static readonly ClassMetaType ClassMetaType = new ClassMetaType();
+
+		/// <summary>
+		/// NHibernate meta type for association of kind <code>any</code> without meta-values.
+		/// </summary>
+		/// <seealso cref="AnyType"/>
+		public static readonly MetaType MetaType = new MetaType(null, String);
 
 		/// <summary>
 		/// NHibernate serializable type
@@ -277,13 +297,24 @@ namespace NHibernate
 		//		/// </summary>
 		//		public static readonly NullableType Clob = new ClobType();
 
-
+		/// <summary>
+		/// NHibernate AnsiChar type
+		/// </summary>
 		public static readonly AnsiCharType AnsiChar = new AnsiCharType();
 
+		/// <summary>
+		/// NHibernate XmlDoc type
+		/// </summary>
 		public static readonly XmlDocType XmlDoc = new XmlDocType();
 
+		/// <summary>
+		/// NHibernate XDoc type
+		/// </summary>
 		public static readonly XDocType XDoc = new XDocType();
 
+		/// <summary>
+		/// NHibernate Uri type
+		/// </summary>
 		public static readonly UriType Uri = new UriType();
 
 		/// <summary>
@@ -364,14 +395,20 @@ namespace NHibernate
 			{
 				return;
 			}
-			else if (proxy.IsProxy())
+			if (proxy.IsProxy())
 			{
 				((INHibernateProxy)proxy).HibernateLazyInitializer.Initialize();
 			}
-			else if (proxy is IPersistentCollection)
+			else if (proxy is ILazyInitializedCollection coll)
 			{
-				((IPersistentCollection)proxy).ForceInitialization();
+				coll.ForceInitialization();
 			}
+			// 6.0 TODO: remove once IPersistentCollection derives from ILazyInitializedCollection
+			else if (proxy is IPersistentCollection persistent)
+			{
+				persistent.ForceInitialization();
+			}
+
 		}
 
 		/// <summary>
@@ -385,9 +422,14 @@ namespace NHibernate
 			{
 				return !((INHibernateProxy)proxy).HibernateLazyInitializer.IsUninitialized;
 			}
-			else if (proxy is IPersistentCollection)
+			else if (proxy is ILazyInitializedCollection coll)
 			{
-				return ((IPersistentCollection)proxy).WasInitialized;
+				return coll.WasInitialized;
+			}
+			// 6.0 TODO: remove once IPersistentCollection derives from ILazyInitializedCollection
+			else if (proxy is IPersistentCollection persistent)
+			{
+				return persistent.WasInitialized;
 			}
 			else
 			{
@@ -496,7 +538,7 @@ namespace NHibernate
 			EnumerableImpl hibernateEnumerator = enumerator as EnumerableImpl;
 			if (hibernateEnumerator == null)
 			{
-				throw new ArgumentException("Not a NHibernate enumerator", "enumerator");
+				throw new ArgumentException("Not a NHibernate enumerator", nameof(enumerator));
 			}
 			hibernateEnumerator.Dispose();
 		}
@@ -510,7 +552,7 @@ namespace NHibernate
 			EnumerableImpl hibernateEnumerable = enumerable as EnumerableImpl;
 			if (hibernateEnumerable == null)
 			{
-				throw new ArgumentException("Not a NHibernate enumerable", "enumerable");
+				throw new ArgumentException("Not a NHibernate enumerable", nameof(enumerable));
 			}
 			hibernateEnumerable.Dispose();
 		}
@@ -546,9 +588,9 @@ namespace NHibernate
 				entity = proxy;
 			}
 
-			if (FieldInterceptionHelper.IsInstrumented(entity))
+			if (entity is IFieldInterceptorAccessor interceptorAccessor)
 			{
-				IFieldInterceptor interceptor = FieldInterceptionHelper.ExtractFieldInterceptor(entity);
+				var interceptor = interceptorAccessor.FieldInterceptor;
 				return interceptor == null || interceptor.IsInitializedField(propertyName);
 			}
 			else

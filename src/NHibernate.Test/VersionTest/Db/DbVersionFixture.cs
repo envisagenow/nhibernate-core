@@ -8,7 +8,7 @@ namespace NHibernate.Test.VersionTest.Db
 	[TestFixture]
 	public class DbVersionFixture : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] {"VersionTest.Db.User.hbm.xml"}; }
 		}
@@ -45,7 +45,7 @@ namespace NHibernate.Test.VersionTest.Db
 			t.Commit();
 			s.Close();
 
-			Assert.That(!NHibernateUtil.Timestamp.IsEqual(guyTimestamp, guy.Timestamp), "owner version not incremented");
+			Assert.That(!NHibernateUtil.DbTimestamp.IsEqual(guyTimestamp, guy.Timestamp), "owner version not incremented");
 
 			guyTimestamp = guy.Timestamp;
 			Thread.Sleep(1500);
@@ -57,7 +57,7 @@ namespace NHibernate.Test.VersionTest.Db
 			t.Commit();
 			s.Close();
 
-			Assert.That(!NHibernateUtil.Timestamp.IsEqual(guyTimestamp, guy.Timestamp), "owner version not incremented");
+			Assert.That(!NHibernateUtil.DbTimestamp.IsEqual(guyTimestamp, guy.Timestamp), "owner version not incremented");
 
 			s = OpenSession();
 			t = s.BeginTransaction();
@@ -89,7 +89,10 @@ namespace NHibernate.Test.VersionTest.Db
 			t.Commit();
 			s.Close();
 
-			Assert.That(NHibernateUtil.Timestamp.IsEqual(guyTimestamp, guy.Timestamp), "owner version was incremented");
+			const string ownerVersionWasIncremented = "owner version was incremented ({0:o} => {1:o})";
+			Assert.That(NHibernateUtil.DbTimestamp.IsEqual(guyTimestamp, guy.Timestamp),
+			            string.Format(ownerVersionWasIncremented, guyTimestamp, guy.Timestamp));
+			Console.WriteLine(string.Format(ownerVersionWasIncremented, guyTimestamp, guy.Timestamp));
 
 			s = OpenSession();
 			t = s.BeginTransaction();
@@ -98,7 +101,8 @@ namespace NHibernate.Test.VersionTest.Db
 			t.Commit();
 			s.Close();
 
-			Assert.That(NHibernateUtil.Timestamp.IsEqual(guyTimestamp, guy.Timestamp), "owner version was incremented");
+			Assert.That(NHibernateUtil.DbTimestamp.IsEqual(guyTimestamp, guy.Timestamp),
+			            string.Format(ownerVersionWasIncremented, guyTimestamp, guy.Timestamp));
 
 			s = OpenSession();
 			t = s.BeginTransaction();

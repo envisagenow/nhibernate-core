@@ -12,6 +12,7 @@ using NHibernate.Proxy;
 using NHibernate.Type;
 using NHibernate.Util;
 using System.Runtime.Serialization;
+using NHibernate.Bytecode.Lightweight;
 
 namespace NHibernate.Tuple.Entity
 {
@@ -19,28 +20,37 @@ namespace NHibernate.Tuple.Entity
 	/// <summary> An <see cref="IEntityTuplizer"/> specific to the POCO entity mode. </summary>
 	public class PocoEntityTuplizer : AbstractEntityTuplizer
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(PocoEntityTuplizer));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(PocoEntityTuplizer));
 		private readonly System.Type mappedClass;
 		private readonly System.Type proxyInterface;
 		private readonly bool islifecycleImplementor;
 		private readonly bool isValidatableImplementor;
-		private readonly HashSet<string> lazyPropertyNames = new HashSet<string>();
-		private readonly HashSet<string> unwrapProxyPropertyNames = new HashSet<string>();
 		[NonSerialized]
 		private IReflectionOptimizer optimizer;
 		private readonly IProxyValidator proxyValidator;
+		[NonSerialized]
+		private bool isBytecodeProviderImpl; // 6.0 TODO: remove
 
 		[OnDeserialized]
 		internal void OnDeserialized(StreamingContext context)
 		{
 			SetReflectionOptimizer();
+
+			if (optimizer != null)
+			{
+				// Also set the InstantiationOptimizer on the deserialized PocoInstantiator.
+				((PocoInstantiator)Instantiator).SetOptimizer(optimizer.InstantiationOptimizer);
+			}
+
+			ClearOptimizerWhenUsingCustomAccessors();
 		}
 		protected void SetReflectionOptimizer()
 		{
 			if (Cfg.Environment.UseReflectionOptimizer)
 			{
 				// NH different behavior fo NH-1587
-				optimizer = Cfg.Environment.BytecodeProvider.GetReflectionOptimizer(mappedClass, getters, setters);
+				optimizer = Cfg.Environment.BytecodeProvider.GetReflectionOptimizer(mappedClass, getters, setters, idGetter, idSetter);
+				isBytecodeProviderImpl = Cfg.Environment.BytecodeProvider is BytecodeProviderImpl;
 			}
 		}
 		public PocoEntityTuplizer(EntityMetamodel entityMetamodel, PersistentClass mappedEntity)
@@ -51,21 +61,11 @@ namespace NHibernate.Tuple.Entity
 			islifecycleImplementor = typeof(ILifecycle).IsAssignableFrom(mappedClass);
 			isValidatableImplementor = typeof(IValidatable).IsAssignableFrom(mappedClass);
 
-			foreach (Mapping.Property property in mappedEntity.PropertyClosureIterator)
-			{
-				if (property.IsLazy)
-					lazyPropertyNames.Add(property.Name);
-				if (property.UnwrapProxy)
-					unwrapProxyPropertyNames.Add(property.Name);
-			}
 			SetReflectionOptimizer();
 
 			Instantiator = BuildInstantiator(mappedEntity);
 
-			if (hasCustomAccessors)
-			{
-				optimizer = null;
-			}
+			ClearOptimizerWhenUsingCustomAccessors();
 
 			proxyValidator = Cfg.Environment.BytecodeProvider.ProxyFactoryFactory.ProxyValidator;
 		}
@@ -75,16 +75,7 @@ namespace NHibernate.Tuple.Entity
 			get { return proxyInterface; }
 		}
 
-		public override bool IsInstrumented
-		{
-			get 
-			{
-				// NH: we can't really check for EntityMetamodel.HasLazyProperties and/or EntityMetamodel.HasUnwrapProxyForProperties here
-				// because this property is used even where subclasses has lazy-properties.
-				// Checking it here, where the root-entity has no lazy properties we will eager-load/double-load those properties.
-				return FieldInterceptionHelper.IsInstrumented(MappedClass);
-			}
-		}
+		public override bool IsInstrumented => EntityMetamodel.BytecodeEnhancementMetadata.EnhancedForLazyLoading;
 
 		public override System.Type MappedClass
 		{
@@ -105,13 +96,13 @@ namespace NHibernate.Tuple.Entity
 		{
 			if (optimizer == null)
 			{
-				log.Debug("Create Instantiator without optimizer for:" + persistentClass.MappedClass.FullName);
-				return new PocoInstantiator(persistentClass, null, ProxyFactory, EntityMetamodel.HasLazyProperties || EntityMetamodel.HasUnwrapProxyForProperties);
+				log.Debug("Create Instantiator without optimizer for:{0}", persistentClass.MappedClass.FullName);
+				return new PocoEntityInstantiator(EntityMetamodel, persistentClass, null, ProxyFactory);
 			}
 			else
 			{
-				log.Debug("Create Instantiator using optimizer for:" + persistentClass.MappedClass.FullName);
-				return new PocoInstantiator(persistentClass, optimizer.InstantiationOptimizer, ProxyFactory, EntityMetamodel.HasLazyProperties || EntityMetamodel.HasUnwrapProxyForProperties);
+				log.Debug("Create Instantiator using optimizer for:{0}", persistentClass.MappedClass.FullName);
+				return new PocoEntityInstantiator(EntityMetamodel, persistentClass, optimizer.InstantiationOptimizer, ProxyFactory);
 			}
 		}
 
@@ -162,7 +153,7 @@ namespace NHibernate.Tuple.Entity
 			 * - Check if the logger is enabled
 			 * - Don't need nothing to check if the mapped-class or proxy is an interface
 			 */
-			if (log.IsErrorEnabled && needAccesorCheck)
+			if (log.IsErrorEnabled() && needAccesorCheck)
 			{
 				LogPropertyAccessorsErrors(persistentClass);
 			}
@@ -185,7 +176,7 @@ namespace NHibernate.Tuple.Entity
 			}
 			catch (HibernateException he)
 			{
-				log.Warn("could not create proxy factory for:" + EntityName, he);
+				log.Warn(he, "could not create proxy factory for:{0}", EntityName);
 				pf = null;
 			}
 			return pf;
@@ -205,16 +196,14 @@ namespace NHibernate.Tuple.Entity
 				MethodInfo method = property.GetGetter(clazz).Method;
 				if (!proxyValidator.IsProxeable(method))
 				{
-					log.Error(
-						string.Format("Getters of lazy classes cannot be final: {0}.{1}", persistentClass.MappedClass.FullName,
-						              property.Name));
+					log.Error("Getters of lazy classes cannot be final: {0}.{1}", persistentClass.MappedClass.FullName,
+						              property.Name);
 				}
 				method = property.GetSetter(clazz).Method;
 				if (!proxyValidator.IsProxeable(method))
 				{
-					log.Error(
-						string.Format("Setters of lazy classes cannot be final: {0}.{1}", persistentClass.MappedClass.FullName,
-						              property.Name));
+					log.Error("Setters of lazy classes cannot be final: {0}.{1}", persistentClass.MappedClass.FullName,
+						              property.Name);
 				}
 			}
 		}
@@ -226,13 +215,30 @@ namespace NHibernate.Tuple.Entity
 
 		public override void AfterInitialize(object entity, bool lazyPropertiesAreUnfetched, ISessionImplementor session)
 		{
-			if (IsInstrumented && (EntityMetamodel.HasLazyProperties || EntityMetamodel.HasUnwrapProxyForProperties))
+			if (IsInstrumented)
 			{
-				HashSet<string> lazyProps = lazyPropertiesAreUnfetched && EntityMetamodel.HasLazyProperties ? lazyPropertyNames : null;
-				//TODO: if we support multiple fetch groups, we would need
-				//      to clone the set of lazy properties!
-				FieldInterceptionHelper.InjectFieldInterceptor(entity, EntityName, this.MappedClass ,lazyProps, unwrapProxyPropertyNames, session);
+				var interceptor = EntityMetamodel.BytecodeEnhancementMetadata.ExtractInterceptor(entity);
+				if (interceptor == null)
+				{
+					interceptor = EntityMetamodel.BytecodeEnhancementMetadata.InjectInterceptor(entity, lazyPropertiesAreUnfetched, session);
+				}
+				else
+				{
+					interceptor.Session = session;
+				}
+
+				interceptor?.ClearDirty();
 			}
+		}
+
+		public override object GetPropertyValue(object entity, int i)
+		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				return optimizer.AccessOptimizer.GetPropertyValue(entity, i);
+			}
+
+			return base.GetPropertyValue(entity, i);
 		}
 
 		public override object[] GetPropertyValues(object entity)
@@ -268,7 +274,7 @@ namespace NHibernate.Tuple.Entity
 		{
 			if (EntityMetamodel.HasLazyProperties)
 			{
-				IFieldInterceptor callback = FieldInterceptionHelper.ExtractFieldInterceptor(entity);
+				var callback = EntityMetamodel.BytecodeEnhancementMetadata.ExtractInterceptor(entity);
 				return callback != null && !callback.IsInitialized;
 			}
 			else
@@ -277,9 +283,30 @@ namespace NHibernate.Tuple.Entity
 			}
 		}
 
+		internal override ISet<string> GetUninitializedLazyProperties(object entity)
+		{
+			if (!EntityMetamodel.HasLazyProperties)
+			{
+				return CollectionHelper.EmptySet<string>();
+			}
+
+			return EntityMetamodel.BytecodeEnhancementMetadata.GetUninitializedLazyProperties(entity);
+		}
+
 		public override bool IsLifecycleImplementor
 		{
 			get { return islifecycleImplementor; }
+		}
+
+		public override void SetPropertyValue(object entity, int i, object value)
+		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				optimizer.AccessOptimizer.SetPropertyValue(entity, i, value);
+				return;
+			}
+
+			base.SetPropertyValue(entity, i, value);
 		}
 
 		public override void SetPropertyValues(object entity, object[] values)
@@ -315,6 +342,35 @@ namespace NHibernate.Tuple.Entity
 		public override EntityMode EntityMode
 		{
 			get { return EntityMode.Poco; }
+		}
+
+		protected void ClearOptimizerWhenUsingCustomAccessors()
+		{
+			if (hasCustomAccessors)
+			{
+				optimizer = null;
+			}
+		}
+
+		protected override object GetIdentifierPropertyValue(object entity)
+		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				return optimizer.AccessOptimizer.GetSpecializedPropertyValue(entity);
+			}
+
+			return base.GetIdentifierPropertyValue(entity);
+		}
+
+		protected override void SetIdentifierPropertyValue(object entity, object value)
+		{
+			if (isBytecodeProviderImpl && optimizer?.AccessOptimizer != null)
+			{
+				optimizer.AccessOptimizer.SetSpecializedPropertyValue(entity, value);
+				return;
+			}
+
+			base.SetIdentifierPropertyValue(entity, value);
 		}
 	}
 }

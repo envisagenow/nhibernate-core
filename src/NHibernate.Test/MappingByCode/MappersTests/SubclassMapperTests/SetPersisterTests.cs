@@ -2,10 +2,10 @@ using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode.Impl;
 using NHibernate.Persister.Entity;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MappersTests.SubclassMapperTests
 {
+	[TestFixture]
 	public class SetPersisterTests
 	{
 		private class EntitySimple
@@ -23,7 +23,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests.SubclassMapperTests
 			var mapdoc = new HbmMapping();
 			var rc = new SubclassMapper(typeof(HineritedSimple), mapdoc);
 			rc.Persister<SingleTableEntityPersister>();
-			mapdoc.SubClasses[0].Persister.Should().Contain("SingleTableEntityPersister");
+			Assert.That(mapdoc.SubClasses[0].Persister, Does.Contain("SingleTableEntityPersister"));
 		}
 	}
 }

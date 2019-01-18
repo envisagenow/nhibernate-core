@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Collections.Generic;
 
@@ -13,12 +12,23 @@ namespace NHibernate.Util
 	/// </summary>
 	public static class ArrayHelper
 	{
-		public static readonly object[] EmptyObjectArray = new object[0];
-		public static readonly int[] EmptyIntArray = new int[0];
-		public static readonly bool[] EmptyBoolArray = new bool[0];
+		//Since v5.1
+		[Obsolete("Please use System.Array.Empty<object>() instead")]
+		public static object[] EmptyObjectArray => Array.Empty<object>();
+		//Since v5.1
+		[Obsolete("Please use System.Array.Empty<int>() instead")]
+		public static int[] EmptyIntArray => Array.Empty<int>();
+		//Since v5.1
+		[Obsolete("Please use System.Array.Empty<bool>() instead")]
+		public static bool[] EmptyBoolArray => Array.Empty<bool>();
 
 		public static readonly bool[] True = new bool[] { true };
 		public static readonly bool[] False = new bool[] { false };
+
+		internal static bool IsNullOrEmpty(Array array)
+		{
+			return array == null || array.Length == 0;
+		}
 
 		public static bool IsAllNegative(int[] array)
 		{
@@ -87,47 +97,27 @@ namespace NHibernate.Util
 			return sb.ToString();
 		}
 
-		// NH-specific
+
+		/// <summary>
+		/// Append all elements in the 'from' list to the 'to' list.
+		/// </summary>
+		/// <param name="to"></param>
+		/// <param name="from"></param>
 		public static void AddAll(IList to, IList from)
 		{
-			System.Action addNull = null;
 			foreach (object obj in from)
 			{
-				// There is bug in .NET, before version 4, where adding null to a List<Nullable<T>> through the non-generic IList interface throws an exception.
-				// TODO: Everything but the to.Add(obj) should be conditionally compiled only for versions of .NET earlier than 4.
-				if (obj == null)
-				{
-					if (addNull == null)
-					{
-						var toType = to.GetType();
-						if (toType.IsGenericType &&
-							toType.GetGenericTypeDefinition() == typeof(List<>) &&
-							toType.GetGenericArguments()[0].IsNullable())
-						{
-							MethodInfo addMethod = toType.GetMethod("Add");
-							var addMethodCall =	System.Linq.Expressions.Expression.Call(System.Linq.Expressions.Expression.Constant(to),
-																		addMethod,
-																		System.Linq.Expressions.Expression.Constant(null, toType.GetGenericArguments()[0]));
-							System.Linq.Expressions.LambdaExpression addLambda =
-								System.Linq.Expressions.Expression.Lambda(addMethodCall);
-
-							addNull = (System.Action)addLambda.Compile();
-						}
-						else
-						{
-							addNull = () => to.Add(null);
-						}
-					}
-					addNull();
-				}
-				else
-				{
-					to.Add(obj);
-				}
+				to.Add(obj);
 			}
 		}
 
 		// NH-specific
+		public static void AddAll<T>(IList<T> to, IList<T> from)
+		{
+			foreach (T obj in from)
+				to.Add(obj);
+		}
+
 		public static void AddAll<TKey, TValue>(IDictionary<TKey, TValue> to, IDictionary<TKey, TValue> from)
 		{
 			foreach (KeyValuePair<TKey, TValue> de in from)
@@ -193,45 +183,72 @@ namespace NHibernate.Util
 
 		public static bool ArrayEquals<T>(T[] a, T[] b)
 		{
-			if (a == b)
-				return true;
-
-			if (a == null || b == null)
-				return false;
-
-			if (a.Length != b.Length)
-				return false;
-
-			for (int i = 0; i < a.Length; i++)
-			{
-				if (!Equals(a[i], b[i]))
-					return false;
-			}
-
-			return true;
+			return ArrayComparer<T>.Default.Equals(a, b);
 		}
 
 		public static bool ArrayEquals(byte[] a, byte[] b)
 		{
-			if (a == b)
-				return true;
+			return ArrayComparer<byte>.Default.Equals(a, b);
+		}
 
-			if (a == null || b == null)
-				return false;
+		/// <summary>
+		/// Calculate a hash code based on the length and contents of the array.
+		/// The algorithm is such that if ArrayHelper.ArrayEquals(a,b) returns true,
+		/// then ArrayGetHashCode(a) == ArrayGetHashCode(b).
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="array"></param>
+		/// <returns></returns>
+		public static int ArrayGetHashCode<T>(T[] array)
+		{
+			return ArrayComparer<T>.Default.GetHashCode(array);
+		}
 
-			if (a.Length != b.Length)
-				return false;
+		internal class ArrayComparer<T> : IEqualityComparer<T[]>
+		{
+			private readonly IEqualityComparer<T> _elementComparer;
 
-			int i = 0;
-			int len = a.Length;
-			while (i < len)
+			internal static ArrayComparer<T> Default { get; } = new ArrayComparer<T>();
+
+			internal ArrayComparer() : this(EqualityComparer<T>.Default) { }
+
+			internal ArrayComparer(IEqualityComparer<T> elementComparer)
 			{
-				if (a[i] != b[i])
+				_elementComparer = elementComparer ?? throw new ArgumentNullException(nameof(elementComparer));
+			}
+
+			public bool Equals(T[] a, T[] b)
+			{
+				if (a == b)
+					return true;
+
+				if (a == null || b == null)
 					return false;
 
-				i++;
+				if (a.Length != b.Length)
+					return false;
+
+				for (var i = 0; i < a.Length; i++)
+				{
+					if (!_elementComparer.Equals(a[i], b[i]))
+						return false;
+				}
+
+				return true;
 			}
-			return true;
+
+			public int GetHashCode(T[] array)
+			{
+				if (array == null)
+					return 0;
+
+				var hc = array.Length;
+
+				foreach (var e in array)
+					hc = unchecked(hc * 31 + _elementComparer.GetHashCode(e));
+
+				return hc;
+			}
 		}
 	}
 }

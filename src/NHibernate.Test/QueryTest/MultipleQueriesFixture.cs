@@ -9,7 +9,7 @@ using NUnit.Framework;
 
 namespace NHibernate.Test.QueryTest
 {
-	[TestFixture]
+	[TestFixture, Obsolete]
 	public class MultipleQueriesFixture : TestCase
 	{
 		protected override string MappingsAssembly
@@ -17,7 +17,7 @@ namespace NHibernate.Test.QueryTest
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "SecondLevelCacheTest.Item.hbm.xml" }; }
 		}
@@ -41,7 +41,7 @@ namespace NHibernate.Test.QueryTest
 		[Test]
 		public void NH_1085_WillIgnoreParametersIfDoesNotAppearInQuery()
 		{
-			using (var s = sessions.OpenSession())
+			using (var s = Sfi.OpenSession())
 			{
 				var multiQuery = s.CreateMultiQuery()
 					.Add("from Item i where i.Id in (:ids)")
@@ -55,7 +55,7 @@ namespace NHibernate.Test.QueryTest
 		[Test]
 		public void NH_1085_WillGiveReasonableErrorIfBadParameterName()
 		{
-			using (var s = sessions.OpenSession())
+			using (var s = Sfi.OpenSession())
 			{
 				var multiQuery = s.CreateMultiQuery()
 					.Add("from Item i where i.Id in (:ids)")
@@ -72,7 +72,7 @@ namespace NHibernate.Test.QueryTest
 			//set the query in the cache
 			DoMutiQueryAndAssert();
 
-			var cacheHashtable = GetHashTableUsedAsQueryCache(sessions);
+			var cacheHashtable = GetHashTableUsedAsQueryCache(Sfi);
 			var cachedListEntry = (IList)new ArrayList(cacheHashtable.Values)[0];
 			var cachedQuery = (IList)cachedListEntry[1];
 
@@ -84,7 +84,7 @@ namespace NHibernate.Test.QueryTest
 			var secondQueryResults = (IList)cachedQuery[1];
 			secondQueryResults[0] = 2L;
 
-			using (var s = sessions.OpenSession())
+			using (var s = Sfi.OpenSession())
 			{
 				var multiQuery = s.CreateMultiQuery()
 					.Add(s.CreateQuery("from Item i where i.Id > ?")
@@ -170,7 +170,7 @@ namespace NHibernate.Test.QueryTest
 		[Test]
 		public void CanUseSecondLevelCacheWithPositionalParameters()
 		{
-			var cacheHashtable = GetHashTableUsedAsQueryCache(sessions);
+			var cacheHashtable = GetHashTableUsedAsQueryCache(Sfi);
 			cacheHashtable.Clear();
 
 			CreateItems();

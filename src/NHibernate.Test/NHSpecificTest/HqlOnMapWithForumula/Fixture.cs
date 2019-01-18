@@ -8,16 +8,16 @@ namespace NHibernate.Test.NHSpecificTest.HqlOnMapWithForumula
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
-		public override string BugNumber
+		protected override bool AppliesTo(Dialect.Dialect dialect)
 		{
-			get { return "HqlOnMapWithForumula"; }
+			// Mapping uses a scalar sub-select formula.
+			return Dialect.SupportsScalarSubSelects;
 		}
-
 
 		[Test]
 		public void TestBug()
 		{
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				s.CreateQuery("from A a where 1 in elements(a.MyMaps)")
 					.List();

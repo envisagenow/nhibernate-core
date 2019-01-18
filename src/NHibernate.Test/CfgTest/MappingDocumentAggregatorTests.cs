@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 
 using NHibernate.Cfg.MappingSchema;
-
+using NHibernate.Util;
 using NUnit.Framework;
 
 namespace NHibernate.Test.CfgTest
@@ -34,7 +34,12 @@ namespace NHibernate.Test.CfgTest
 
 			using (MemoryStream memory = new MemoryStream())
 			{
-				BinaryFormatter formatter = new BinaryFormatter();
+				var formatter = new BinaryFormatter
+				{
+#if !NETFX
+					SurrogateSelector = new SerializationHelper.SurrogateSelector()	
+#endif
+				};
 				formatter.Serialize(memory, originalList);
 
 				memory.Position = 0;
@@ -65,7 +70,7 @@ namespace NHibernate.Test.CfgTest
 
 			for (int i = 0; i < 5; i++)
 			{
-				FileInfo tempFile = new FileInfo(Guid.NewGuid() + ".hbm.binary");
+				FileInfo tempFile = new FileInfo(Path.Combine(TestContext.CurrentContext.TestDirectory, Guid.NewGuid() + ".hbm.binary"));
 
 				// Load the embedded xml mappings (and time it)
 				Stopwatch stopwatch1 = Stopwatch.StartNew();
@@ -76,7 +81,12 @@ namespace NHibernate.Test.CfgTest
 
 				// write those same mappings to disk
 				IList<HbmMapping> mappings = aggregator.List();
-				BinaryFormatter formatter = new BinaryFormatter();
+				var formatter = new BinaryFormatter
+				{
+#if !NETFX
+					SurrogateSelector = new SerializationHelper.SurrogateSelector()	
+#endif
+				};
 				using (FileStream stream = tempFile.OpenWrite())
 					formatter.Serialize(stream, mappings);
 

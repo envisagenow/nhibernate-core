@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NHibernate.Cfg.MappingSchema;
+using NHibernate.Util;
 
 namespace NHibernate.Mapping.ByCode.Impl
 {
-	public class ManyToOneMapper : IManyToOneMapper
+	// 6.0 TODO: remove IColumnsAndFormulasMapper once IManyToOneMapper inherits it.
+	public class ManyToOneMapper : IManyToOneMapper, IColumnsAndFormulasMapper
 	{
 		private readonly IAccessorPropertyMapper _entityPropertyMapper;
 		private readonly HbmManyToOne _manyToOne;
@@ -42,9 +44,14 @@ namespace NHibernate.Mapping.ByCode.Impl
 			_manyToOne.@class = entityType.GetShortClassName(_mapDoc);
 		}
 
+		public void EntityName(string entityName)
+		{
+			_manyToOne.entityname = entityName;
+		}
+
 		public void Cascade(Cascade cascadeStyle)
 		{
-			_manyToOne.cascade = (cascadeStyle.Exclude(ByCode.Cascade.DeleteOrphans)).ToCascadeString();
+			_manyToOne.cascade = cascadeStyle.ToCascadeString();
 		}
 
 		public void NotNullable(bool notnull)
@@ -54,43 +61,23 @@ namespace NHibernate.Mapping.ByCode.Impl
 
 		public void Unique(bool unique)
 		{
-			Column(x => x.Unique(unique));
+			_manyToOne.unique = unique;
 		}
 
 		public void UniqueKey(string uniquekeyName)
 		{
-			Column(x => x.UniqueKey(uniquekeyName));
+			_manyToOne.uniquekey = uniquekeyName;
 		}
 
 		public void Index(string indexName)
 		{
-			Column(x => x.Index(indexName));
+			_manyToOne.index = indexName;
 		}
 
 		public void Fetch(FetchKind fetchMode)
 		{
 			_manyToOne.fetch = fetchMode.ToHbm();
 			_manyToOne.fetchSpecified = _manyToOne.fetch == HbmFetchMode.Join;
-		}
-
-		public void Formula(string formula)
-		{
-			if (formula == null)
-			{
-				return;
-			}
-
-			ResetColumnPlainValues();
-			_manyToOne.Items = null;
-			string[] formulaLines = formula.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-			if (formulaLines.Length > 1)
-			{
-				_manyToOne.Items = new[] { new HbmFormula { Text = formulaLines } };
-			}
-			else
-			{
-				_manyToOne.formula = formula;
-			}
 		}
 
 		public void Lazy(LazyRelation lazyRelation)
@@ -141,6 +128,55 @@ namespace NHibernate.Mapping.ByCode.Impl
 		public void OptimisticLock(bool takeInConsiderationForOptimisticLock)
 		{
 			_manyToOne.optimisticlock = takeInConsiderationForOptimisticLock;
+		}
+
+		#endregion
+		
+		#region Implementation of IColumnsAndFormulasMapper
+
+		/// <inheritdoc />
+		public void ColumnsAndFormulas(params Action<IColumnOrFormulaMapper>[] columnOrFormulaMapper)
+		{
+			ResetColumnPlainValues();
+
+			_manyToOne.Items = ColumnOrFormulaMapper.GetItemsFor(
+				columnOrFormulaMapper,
+				_member != null ? _member.Name : "unnamedcolumn");
+		}
+
+		/// <inheritdoc cref="IColumnsAndFormulasMapper.Formula" />
+		public void Formula(string formula)
+		{
+			if (formula == null)
+			{
+				return;
+			}
+
+			ResetColumnPlainValues();
+			_manyToOne.Items = null;
+			string[] formulaLines = formula.Split(StringHelper.LineSeparators, StringSplitOptions.None);
+			if (formulaLines.Length > 1)
+			{
+				_manyToOne.Items = new object[] { new HbmFormula { Text = formulaLines } };
+			}
+			else
+			{
+				_manyToOne.formula = formula;
+			}
+		}
+
+		/// <inheritdoc />
+		public void Formulas(params string[] formulas)
+		{
+			if (formulas == null)
+				throw new ArgumentNullException(nameof(formulas));
+
+			ResetColumnPlainValues();
+			_manyToOne.Items =
+				formulas
+					.Select(
+						f => (object) new HbmFormula { Text = f.Split(StringHelper.LineSeparators, StringSplitOptions.None) })
+					.ToArray();
 		}
 
 		#endregion

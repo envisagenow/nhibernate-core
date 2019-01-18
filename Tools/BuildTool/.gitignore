@@ -1,0 +1,10 @@
+# Ignore file for Visual Studio 2015
+
+*.user
+*.suo
+.vs/
+bin/
+obj/
+*.vshost.*
+.idea/
+.vs/

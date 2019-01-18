@@ -37,6 +37,9 @@ namespace NHibernate.Mapping
 			prop.PersistentClass = PersistentClass;
 		}
 
+		//if we are joining to a non pk, this is the property of the class that serves as id
+		public Property RefIdProperty { get; set; }
+
 		public bool ContainsProperty(Property prop)
 		{
 			return properties.Contains(prop);
@@ -82,12 +85,19 @@ namespace NHibernate.Mapping
 			}
 		}
 
+		//Since v5.2
+		[Obsolete("Please use overload without dialect parameter.")]
 		public void CreatePrimaryKey(Dialect.Dialect dialect)
+		{
+			CreatePrimaryKey();
+		}
+
+		public void CreatePrimaryKey()
 		{
 			//Primary key constraint
 			PrimaryKey pk = new PrimaryKey();
 			pk.Table = table;
-			pk.Name = PK_ALIAS.ToAliasString(table.Name, dialect);
+			pk.Name = PK_ALIAS.ToAliasString(table.Name);
 			table.PrimaryKey = pk;
 
 			pk.AddColumns(Key.ColumnIterator.OfType<Column>());

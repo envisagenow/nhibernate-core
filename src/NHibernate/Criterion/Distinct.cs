@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using NHibernate.Engine;
 using NHibernate.SqlCommand;
 using NHibernate.Type;
@@ -7,7 +6,7 @@ using NHibernate.Type;
 namespace NHibernate.Criterion
 {
 	[Serializable]
-	public class Distinct : IEnhancedProjection
+	public class Distinct : IProjection
 	{
 		private readonly IProjection projection;
 
@@ -16,15 +15,15 @@ namespace NHibernate.Criterion
 			this.projection = proj;
 		}
 
-		public virtual SqlString ToSqlString(ICriteria criteria, int position, ICriteriaQuery criteriaQuery, IDictionary<string, IFilter> enabledFilters)
+		public virtual SqlString ToSqlString(ICriteria criteria, int position, ICriteriaQuery criteriaQuery)
 		{
 			return new SqlString("distinct ")
-				.Append(projection.ToSqlString(criteria, position, criteriaQuery,enabledFilters));
+				.Append(projection.ToSqlString(criteria, position, criteriaQuery));
 		}
 
-		public virtual SqlString ToGroupSqlString(ICriteria criteria, ICriteriaQuery criteriaQuery, IDictionary<string, IFilter> enabledFilters)
+		public virtual SqlString ToGroupSqlString(ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return projection.ToGroupSqlString(criteria, criteriaQuery,enabledFilters);
+			return projection.ToGroupSqlString(criteria, criteriaQuery);
 		}
 
 		public virtual IType[] GetTypes(ICriteria criteria, ICriteriaQuery criteriaQuery)
@@ -37,28 +36,14 @@ namespace NHibernate.Criterion
 			return projection.GetTypes(alias, criteria, criteriaQuery);
 		}
 
-		public virtual string[] GetColumnAliases(int loc)
-		{
-			return projection.GetColumnAliases(loc);
-		}
-		
 		public virtual string[] GetColumnAliases(int position, ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return projection is IEnhancedProjection
-				? ((IEnhancedProjection)projection).GetColumnAliases(position, criteria, criteriaQuery)
-				: GetColumnAliases(position);
+			return projection.GetColumnAliases(position, criteria, criteriaQuery);
 		}
 
-		public virtual string[] GetColumnAliases(string alias, int loc)
-		{
-			return projection.GetColumnAliases(alias, loc);
-		}
-		
 		public virtual string[] GetColumnAliases(string alias, int position, ICriteria criteria, ICriteriaQuery criteriaQuery)
 		{
-			return projection is IEnhancedProjection
-				? ((IEnhancedProjection)projection).GetColumnAliases(alias, position, criteria, criteriaQuery)
-				: GetColumnAliases(alias, position);
+			return projection.GetColumnAliases(alias, position, criteria, criteriaQuery);
 		}
 
 		public virtual string[] Aliases

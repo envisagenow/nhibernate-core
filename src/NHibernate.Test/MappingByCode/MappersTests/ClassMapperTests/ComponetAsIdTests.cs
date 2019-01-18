@@ -4,10 +4,10 @@ using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode;
 using NHibernate.Mapping.ByCode.Impl;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.MappersTests.ClassMapperTests
 {
+	[TestFixture]
 	public class ComponetAsIdTests
 	{
 		private class PersonId
@@ -18,7 +18,10 @@ namespace NHibernate.Test.MappingByCode.MappersTests.ClassMapperTests
 
 		private class Person
 		{
+			// Assigned by reflection
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 			private PersonId id;
+#pragma warning restore CS0649 // Field is never assigned to, and will always have its default value
 			public PersonId Id
 			{
 				get { return id; }
@@ -39,17 +42,17 @@ namespace NHibernate.Test.MappingByCode.MappersTests.ClassMapperTests
 			var mapper = new ClassMapper(typeof(Person), mapdoc, For<Person>.Property(x => x.Id));
 
 			mapper.ComponentAsId(For<Person>.Property(x => x.Id), map =>
-			                                                      {
+																  {
 																															map.Property(For<PersonId>.Property(x => x.Email), pm => { });
 																															map.ManyToOne(For<PersonId>.Property(x => x.User), pm => { });
 																														});
 			var hbmClass = mapdoc.RootClasses[0];
-			hbmClass.Id.Should().Be.Null();
+			Assert.That(hbmClass.Id, Is.Null);
 			var hbmCompositeId = hbmClass.CompositeId;
-			hbmCompositeId.Should().Not.Be.Null();
-			hbmCompositeId.@class.Should().Not.Be.Null();
-			hbmCompositeId.Items.Should().Have.Count.EqualTo(2);
-			hbmCompositeId.Items.Select(x => x.GetType()).Should().Have.SameValuesAs(typeof(HbmKeyProperty),typeof(HbmKeyManyToOne));
+			Assert.That(hbmCompositeId, Is.Not.Null);
+			Assert.That(hbmCompositeId.@class, Is.Not.Null);
+			Assert.That(hbmCompositeId.Items, Has.Length.EqualTo(2));
+			Assert.That(hbmCompositeId.Items.Select(x => x.GetType()), Is.EquivalentTo(new [] {typeof(HbmKeyProperty), typeof(HbmKeyManyToOne)}));
 		}
 
 		[Test]
@@ -66,10 +69,10 @@ namespace NHibernate.Test.MappingByCode.MappersTests.ClassMapperTests
 			mapper.ComponentAsId(For<Person>.Property(x => x.Id), map => map.Access(Accessor.Field));
 
 			var hbmClass = mapdoc.RootClasses[0];
-			hbmClass.Id.Should().Be.Null();
+			Assert.That(hbmClass.Id, Is.Null);
 			var hbmCompositeId = hbmClass.CompositeId;
-			hbmCompositeId.Items.Should().Have.Count.EqualTo(2);
-			hbmCompositeId.access.Should().Contain("field");
+			Assert.That(hbmCompositeId.Items, Has.Length.EqualTo(2));
+			Assert.That(hbmCompositeId.access, Does.Contain("field"));
 		}
 
 		[Test]
@@ -78,7 +81,7 @@ namespace NHibernate.Test.MappingByCode.MappersTests.ClassMapperTests
 			var mapdoc = new HbmMapping();
 			var mapper = new ClassMapper(typeof(Person), mapdoc, For<Person>.Property(x => x.Id));
 
-			mapper.Executing(m => m.ComponentAsId(For<User>.Property(x => x.Id), map => map.Access(Accessor.Field))).Throws<ArgumentOutOfRangeException>();
+			Assert.That(() => mapper.ComponentAsId(For<User>.Property(x => x.Id), map => map.Access(Accessor.Field)), Throws.TypeOf<ArgumentOutOfRangeException>());
 		}
 
 	}

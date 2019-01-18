@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -11,7 +12,7 @@ namespace NHibernate.Loader.Custom.Sql
 {
 	public class SQLQueryReturnProcessor
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof (SQLQueryReturnProcessor));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof (SQLQueryReturnProcessor));
 
 		private readonly INativeSQLQueryReturn[] queryReturns;
 
@@ -103,14 +104,7 @@ namespace NHibernate.Loader.Custom.Sql
 		private IDictionary<string, string[]> InternalGetPropertyResultsMap(string alias)
 		{
 			NativeSQLQueryNonScalarReturn rtn = alias2Return[alias] as NativeSQLQueryNonScalarReturn;
-			if (rtn != null)
-			{
-				return rtn.PropertyResultsMap;
-			}
-			else
-			{
-				return null;
-			}
+			return rtn != null ? rtn.PropertyResultsMap : null;
 		}
 
 		private bool HasPropertyResultMap(string alias)
@@ -125,13 +119,13 @@ namespace NHibernate.Loader.Custom.Sql
 			// so that role returns can be more easily resolved to their owners
 			for (int i = 0; i < queryReturns.Length; i++)
 			{
-				if (queryReturns[i] is NativeSQLQueryNonScalarReturn)
+				var rtn = queryReturns[i] as NativeSQLQueryNonScalarReturn;
+				if (rtn != null)
 				{
-					NativeSQLQueryNonScalarReturn rtn = (NativeSQLQueryNonScalarReturn) queryReturns[i];
 					alias2Return[rtn.Alias] = rtn;
-					if (rtn is NativeSQLQueryJoinReturn)
+					var roleReturn = queryReturns[i] as NativeSQLQueryJoinReturn;
+					if (roleReturn != null)
 					{
-						NativeSQLQueryJoinReturn roleReturn = (NativeSQLQueryJoinReturn) queryReturns[i];
 						alias2OwnerAlias[roleReturn.Alias] = roleReturn.OwnerAlias;
 					}
 				}
@@ -205,7 +199,7 @@ namespace NHibernate.Loader.Custom.Sql
 		{
 			alias2Persister[alias] = persister;
 			string suffix = GenerateEntitySuffix();
-			log.Debug("mapping alias [" + alias + "] to entity-suffix [" + suffix + "]");
+			log.Debug("mapping alias [{0}] to entity-suffix [{1}]", alias, suffix);
 			alias2Suffix[alias] = suffix;
 			entityPropertyResultMaps[alias] = propertyResult;
 		}
@@ -215,7 +209,7 @@ namespace NHibernate.Loader.Custom.Sql
 			ISqlLoadableCollection collectionPersister = (ISqlLoadableCollection) Factory.GetCollectionPersister(role);
 			alias2CollectionPersister[alias] = collectionPersister;
 			string suffix = GenerateCollectionSuffix();
-			log.Debug("mapping alias [" + alias + "] to collection-suffix [" + suffix + "]");
+			log.Debug("mapping alias [{0}] to collection-suffix [{1}]", alias, suffix);
 			alias2CollectionSuffix[alias] = suffix;
 			collectionPropertyResultMaps[alias] = propertyResults;
 
@@ -235,7 +229,7 @@ namespace NHibernate.Loader.Custom.Sql
 			foreach (KeyValuePair<string, string[]> element in propertyResults)
 			{
 				string path = element.Key;
-				if (path.StartsWith(keyPrefix))
+				if (path.StartsWith(keyPrefix, StringComparison.Ordinal))
 				{
 					result[path.Substring(keyPrefix.Length)] = element.Value;
 				}

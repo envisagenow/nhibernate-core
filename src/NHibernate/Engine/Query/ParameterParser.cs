@@ -12,8 +12,6 @@ namespace NHibernate.Engine.Query
 	/// </summary>
 	public class ParameterParser
 	{
-		private static readonly int NewLineLength = Environment.NewLine.Length;
-
 		public interface IRecognizer
 		{
 			void OutParameter(int position);
@@ -44,11 +42,8 @@ namespace NHibernate.Engine.Query
 		public static void Parse(string sqlString, IRecognizer recognizer)
 		{
 			// TODO: WTF? "CALL"... it may work for ORACLE but what about others RDBMS ? (by FM)
-			bool hasMainOutputParameter = sqlString.IndexOf("call") > 0 &&
-										  sqlString.IndexOf("?") > 0 &&
-										  sqlString.IndexOf("=") > 0 &&
-										  sqlString.IndexOf("?") < sqlString.IndexOf("call") &&
-										  sqlString.IndexOf("=") < sqlString.IndexOf("call");
+			var indexOfCall = sqlString.IndexOf("call", StringComparison.Ordinal);
+			bool hasMainOutputParameter = CallableParser.HasReturnParameter(sqlString, indexOfCall);
 			bool foundMainOutputParam = false;
 
 			int stringLength = sqlString.Length;
@@ -56,17 +51,21 @@ namespace NHibernate.Engine.Query
 			bool afterNewLine = false;
 			for (int indx = 0; indx < stringLength; indx++)
 			{
+				int currentNewLineLength;
+
 				// check comments
 				if (indx + 1 < stringLength && sqlString.Substring(indx,2) == "/*")
 				{
-					var closeCommentIdx = sqlString.IndexOf("*/", indx+2);
+					var closeCommentIdx = sqlString.IndexOf("*/", indx + 2, StringComparison.Ordinal);
 					recognizer.Other(sqlString.Substring(indx, (closeCommentIdx- indx)+2));
 					indx = closeCommentIdx + 1;
 					continue;
 				}
+				
 				if (afterNewLine && (indx + 1 < stringLength) && sqlString.Substring(indx, 2) == "--")
 				{
-					var closeCommentIdx = sqlString.IndexOf(Environment.NewLine, indx + 2);
+					var closeCommentIdx = sqlString.IndexOfAnyNewLine(indx + 2, out currentNewLineLength);
+						
 					string comment;
 					if (closeCommentIdx == -1)
 					{
@@ -75,16 +74,17 @@ namespace NHibernate.Engine.Query
 					}
 					else
 					{
-						comment = sqlString.Substring(indx, closeCommentIdx - indx + Environment.NewLine.Length);
+						comment = sqlString.Substring(indx, closeCommentIdx - indx + currentNewLineLength);
 					}
 					recognizer.Other(comment);
-					indx = closeCommentIdx + NewLineLength - 1;
+					indx = closeCommentIdx + currentNewLineLength - 1;
 					continue;
 				}
-				if (indx + NewLineLength -1 < stringLength && sqlString.Substring(indx, NewLineLength) == Environment.NewLine)
+
+				if (sqlString.IsAnyNewLine(indx, out currentNewLineLength))
 				{
 					afterNewLine = true;
-					indx += NewLineLength - 1;
+					indx += currentNewLineLength - 1;
 					recognizer.Other(Environment.NewLine);
 					continue;
 				}
@@ -109,7 +109,7 @@ namespace NHibernate.Engine.Query
 					if (c == ':')
 					{
 						// named parameter
-						int right = StringHelper.FirstIndexOfChar(sqlString, ParserHelper.HqlSeparators, indx + 1);
+						int right = StringHelper.FirstIndexOfChar(sqlString, ParserHelper.HqlSeparatorsAsCharArray, indx + 1);
 						int chopLocation = right < 0 ? sqlString.Length : right;
 						string param = sqlString.Substring(indx + 1, chopLocation - (indx + 1));
 						recognizer.NamedParameter(param, indx);
@@ -121,7 +121,7 @@ namespace NHibernate.Engine.Query
 						if (indx < stringLength - 1 && char.IsDigit(sqlString[indx + 1]))
 						{
 							// a peek ahead showed this as an ejb3-positional parameter
-							int right = StringHelper.FirstIndexOfChar(sqlString, ParserHelper.HqlSeparators, indx + 1);
+							int right = StringHelper.FirstIndexOfChar(sqlString, ParserHelper.HqlSeparatorsAsCharArray, indx + 1);
 							int chopLocation = right < 0 ? sqlString.Length : right;
 							string param = sqlString.Substring(indx + 1, chopLocation - (indx + 1));
 							// make sure this "name" is an integral

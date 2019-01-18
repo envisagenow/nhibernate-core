@@ -158,10 +158,9 @@ namespace NHibernate.SqlCommand
 		/// </summary>
 		/// <param name="sqlString">The SqlString to add to this SqlStringBuilder</param>
 		/// <returns>This SqlStringBuilder</returns>
-		/// <remarks>This calls the overloaded Add(sqlString, null, null, null, false)</remarks>
 		public SqlStringBuilder Add(SqlString sqlString)
 		{
-			sqlString.Visit(AddingVisitor);
+			sqlString?.Visit(AddingVisitor);
 			return this;
 		}
 
@@ -175,7 +174,7 @@ namespace NHibernate.SqlCommand
 		/// <param name="postfix">String to put at the end of the combined SqlString.</param>
 		/// <returns>This SqlStringBuilder</returns>
 		/// <remarks>
-		/// This calls the overloaded Add method with an array of SqlStrings and wrapStatment=false
+		/// This calls the overloaded Add method with an array of SqlStrings and wrapStatement=false
 		/// so it will not be wrapped with a "(" and ")"
 		/// </remarks>
 		public SqlStringBuilder Add(SqlString sqlString, string prefix, string op, string postfix)
@@ -217,7 +216,7 @@ namespace NHibernate.SqlCommand
 
 			foreach (SqlString sqlString in sqlStrings)
 			{
-				if (sqlString.Count == 0)
+				if (sqlString == null || sqlString.Count == 0)
 				{
 					continue;
 				}

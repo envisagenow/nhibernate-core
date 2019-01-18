@@ -10,12 +10,12 @@ namespace NHibernate.Mapping
 	/// <summary>
 	/// Declaration of a System.Type mapped with the <c>&lt;class&gt;</c> element that
 	/// is the root class of a table-per-subclass, or table-per-concrete-class 
-	/// inheritance heirarchy.
+	/// inheritance hierarchy.
 	/// </summary>
 	[Serializable]
 	public class RootClass : PersistentClass, ITableOwner
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof(RootClass));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof(RootClass));
 
 		/// <summary>
 		/// The default name of the column for the Identifier
@@ -387,11 +387,11 @@ namespace NHibernate.Mapping
 					System.Type idClass = id.ComponentClass;
 					if (idClass != null && !ReflectHelper.OverridesEquals(idClass))
 					{
-						log.Warn("composite-id class does not override Equals(): " + id.ComponentClass.FullName);
+						log.Warn("composite-id class does not override Equals(): {0}", id.ComponentClass.FullName);
 					}
 					if (!ReflectHelper.OverridesGetHashCode(idClass))
 					{
-						log.Warn("composite-id class does not override GetHashCode(): " + id.ComponentClass.FullName);
+						log.Warn("composite-id class does not override GetHashCode(): {0}", id.ComponentClass.FullName);
 					}
 					// NH: Not ported
 					//if (!typeof(System.Runtime.Serialization.ISerializable).IsAssignableFrom(idClass))

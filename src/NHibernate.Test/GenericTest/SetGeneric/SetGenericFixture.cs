@@ -10,7 +10,7 @@ namespace NHibernate.Test.GenericTest.SetGeneric
 	public class SetGenericFixture : TestCase
 	{
 
-		protected override System.Collections.IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "GenericTest.SetGeneric.SetGenericFixture.hbm.xml" }; }
 		}
@@ -22,7 +22,7 @@ namespace NHibernate.Test.GenericTest.SetGeneric
 
 		protected override void OnTearDown()
 		{
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				s.Delete("from A");
 				s.Flush();

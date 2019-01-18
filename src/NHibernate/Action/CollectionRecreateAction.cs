@@ -8,7 +8,7 @@ using NHibernate.Persister.Collection;
 namespace NHibernate.Action
 {
 	[Serializable]
-	public sealed class CollectionRecreateAction : CollectionAction
+	public sealed partial class CollectionRecreateAction : CollectionAction
 	{
 		public CollectionRecreateAction(IPersistentCollection collection, ICollectionPersister persister, object key, ISessionImplementor session)
 			: base(persister, collection, key, session) { }
@@ -30,9 +30,15 @@ namespace NHibernate.Action
 
 			PreRecreate();
 
-			Persister.Recreate(collection, Key, Session);
+			var key = GetKey();
+			Persister.Recreate(collection, key, Session);
 
-			Session.PersistenceContext.GetCollectionEntry(collection).AfterAction(collection);
+			var entry = Session.PersistenceContext.GetCollectionEntry(collection);
+			// On collection create, the current key may refer a delayed post insert instance instead
+			// of the actual identifier, that GetKey above should have resolved at that point. Update
+			// it.
+			entry.CurrentKey = key;
+			entry.AfterAction(collection);
 
 			Evict();
 

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
@@ -9,6 +10,9 @@ namespace NHibernate.Linq.Functions
 		private readonly Dictionary<MethodInfo, IHqlGeneratorForMethod> registeredMethods = new Dictionary<MethodInfo, IHqlGeneratorForMethod>();
 		private readonly Dictionary<MemberInfo, IHqlGeneratorForProperty> registeredProperties = new Dictionary<MemberInfo, IHqlGeneratorForProperty>();
 		private readonly List<IRuntimeMethodHqlGenerator> runtimeMethodHqlGenerators = new List<IRuntimeMethodHqlGenerator>();
+
+		private readonly ConcurrentDictionary<MethodInfo, IHqlGeneratorForMethod> _cachedRuntimeMethodHqlGenerators =
+			new ConcurrentDictionary<MethodInfo, IHqlGeneratorForMethod>();
 
 		public DefaultLinqToHqlGeneratorsRegistry()
 		{
@@ -25,17 +29,23 @@ namespace NHibernate.Linq.Functions
 			RegisterGenerator(new CompareGenerator());
 			this.Merge(new CompareGenerator());
 
+			//NH-3720
+			this.Merge(new ConvertToDateTimeGenerator());
+			this.Merge(new ConvertToBooleanGenerator());
+			this.Merge(new ConvertToInt32Generator());
+			this.Merge(new ConvertToDecimalGenerator());
+			this.Merge(new ConvertToDoubleGenerator());
 			this.Merge(new StartsWithGenerator());
 			this.Merge(new EndsWithGenerator());
 			this.Merge(new ContainsGenerator());
 			this.Merge(new EqualsGenerator());
-			this.Merge(new BoolEqualsGenerator());
 			this.Merge(new ToUpperGenerator());
 			this.Merge(new ToLowerGenerator());
 			this.Merge(new SubStringGenerator());
 			this.Merge(new IndexOfGenerator());
 			this.Merge(new ReplaceGenerator());
 			this.Merge(new LengthGenerator());
+			this.Merge(new GetCharsGenerator());
 			this.Merge(new TrimGenerator());
 			this.Merge(new MathGenerator());
 
@@ -46,18 +56,32 @@ namespace NHibernate.Linq.Functions
 			this.Merge(new CollectionContainsGenerator());
 
 			this.Merge(new DateTimePropertiesHqlGenerator());
+
+			this.Merge(new DecimalAddGenerator());
+			this.Merge(new DecimalDivideGenerator());
+			this.Merge(new DecimalMultiplyGenerator());
+			this.Merge(new DecimalSubtractGenerator());
+			this.Merge(new DecimalRemainderGenerator());
+			this.Merge(new DecimalNegateGenerator());
+			this.Merge(new RoundGenerator());
+			this.Merge(new TruncateGenerator());
+
+			var indexerGenerator = new ListIndexerGenerator();
+			RegisterGenerator(indexerGenerator);
+			this.Merge(indexerGenerator);
 		}
 
 		protected bool GetRuntimeMethodGenerator(MethodInfo method, out IHqlGeneratorForMethod methodGenerator)
 		{
-			methodGenerator = null;
+			methodGenerator = _cachedRuntimeMethodHqlGenerators.GetOrAdd(
+				method,
+				m =>
+					runtimeMethodHqlGenerators
+						.Where(g => g.SupportsMethod(m))
+						.Select(g => g.GetMethodGenerator(m))
+						.FirstOrDefault());
 
-			foreach (var typeGenerator in runtimeMethodHqlGenerators.Where(typeGenerator => typeGenerator.SupportsMethod(method)))
-			{
-				methodGenerator = typeGenerator.GetMethodGenerator(method);
-				return true;
-			}
-			return false;
+			return methodGenerator != null;
 		}
 
 		public virtual bool TryGetGenerator(MethodInfo method, out IHqlGeneratorForMethod generator)
@@ -93,6 +117,7 @@ namespace NHibernate.Linq.Functions
 		public void RegisterGenerator(IRuntimeMethodHqlGenerator generator)
 		{
 			runtimeMethodHqlGenerators.Add(generator);
+			_cachedRuntimeMethodHqlGenerators.Clear();
 		}
 	}
 }

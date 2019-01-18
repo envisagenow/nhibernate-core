@@ -1,12 +1,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.Common;
 using System.Text;
 using NHibernate.AdoNet;
 using NHibernate.Cache;
-using NHibernate.Cfg;
 using NHibernate.Collection;
 using NHibernate.Engine;
 using NHibernate.Exceptions;
@@ -19,14 +17,14 @@ using NHibernate.Util;
 
 namespace NHibernate.Persister.Collection
 {
-	public class OneToManyPersister : AbstractCollectionPersister
+	public partial class OneToManyPersister : AbstractCollectionPersister, ISupportSelectModeJoinable
 	{
 		private readonly bool _cascadeDeleteEnabled;
 		private readonly bool _keyIsNullable;
 		private readonly bool _keyIsUpdateable;
 
-		public OneToManyPersister(Mapping.Collection collection, ICacheConcurrencyStrategy cache, Configuration cfg, ISessionFactoryImplementor factory)
-			: base(collection, cache, cfg, factory)
+		public OneToManyPersister(Mapping.Collection collection, ICacheConcurrencyStrategy cache, ISessionFactoryImplementor factory)
+			: base(collection, cache, factory)
 		{
 			_cascadeDeleteEnabled = collection.Key.IsCascadeDeleteEnabled && factory.Dialect.SupportsCascadeDelete;
 			_keyIsNullable = collection.Key.IsNullable;
@@ -69,7 +67,7 @@ namespace NHibernate.Persister.Collection
 				.AddColumns(KeyColumnNames, "null")
 				.SetIdentityColumn(KeyColumnNames, KeyType);
 
-			if (HasIndex)
+			if (HasIndex && !indexContainsFormula)
 				update.AddColumns(IndexColumnNames, "null");
 
 			if (HasWhere)
@@ -107,18 +105,19 @@ namespace NHibernate.Persister.Collection
 		/// <summary>
 		/// Not needed for one-to-many association
 		/// </summary>
-		/// <returns></returns>
 		protected override SqlCommandInfo GenerateUpdateRowString()
 		{
 			return null;
 		}
 
+		/// <inheritdoc />
 		/// <summary>
 		/// Generate the SQL UPDATE that updates a particular row's foreign
-		/// key to null
+		/// key to null.
 		/// </summary>
-		/// <returns></returns>
-		protected override SqlCommandInfo GenerateDeleteRowString()
+		/// <param name="columnNullness">Unused, the element is the entity key and should not contain null
+		/// values.</param>
+		protected override SqlCommandInfo GenerateDeleteRowString(bool[] columnNullness)
 		{
 			var update = new SqlUpdateBuilder(Factory.Dialect, Factory);
 			update.SetTableName(qualifiedTableName)
@@ -161,150 +160,154 @@ namespace NHibernate.Persister.Collection
 
 				if (RowDeleteEnabled)
 				{
-					bool useBatch = true;
-					IDbCommand st = null;
+					IExpectation deleteExpectation = Expectations.AppropriateExpectation(DeleteCheckStyle);
+					bool useBatch = deleteExpectation.CanBeBatched;
+					SqlCommandInfo sql = SqlDeleteRowString;
 					// update removed rows fks to null
-					try
+					int i = 0;
+					IEnumerable entries = collection.Entries(this);
+
+					foreach (object entry in entries)
 					{
-						int i = 0;
-						IEnumerable entries = collection.Entries(this);
-						IExpectation expectation = Expectations.None;
-
-						foreach (object entry in entries)
+						if (collection.NeedsUpdating(entry, i, ElementType))
 						{
-							if (collection.NeedsUpdating(entry, i, ElementType))
+							DbCommand st;
+							// will still be issued when it used to be null
+							if (useBatch)
 							{
-								// will still be issued when it used to be null
-								if (st == null)
-								{
-									SqlCommandInfo sql = SqlDeleteRowString;
-									if (DeleteCallable)
-									{
-										expectation = Expectations.AppropriateExpectation(DeleteCheckStyle);
-										useBatch = expectation.CanBeBatched;
-										st = useBatch
-												? session.Batcher.PrepareBatchCommand(SqlDeleteRowString.CommandType, sql.Text, SqlDeleteRowString.ParameterTypes)
-												: session.Batcher.PrepareCommand(SqlDeleteRowString.CommandType, sql.Text, SqlDeleteRowString.ParameterTypes);
-										//offset += expectation.prepare(st);
-									}
-									else
-									{
-										st = session.Batcher.PrepareBatchCommand(SqlDeleteRowString.CommandType, sql.Text, SqlDeleteRowString.ParameterTypes);
-									}
-								}
+								st = session.Batcher.PrepareBatchCommand(SqlDeleteRowString.CommandType, sql.Text,
+																		 SqlDeleteRowString.ParameterTypes);
+							}
+							else
+							{
+								st = session.Batcher.PrepareCommand(SqlDeleteRowString.CommandType, sql.Text,
+																	SqlDeleteRowString.ParameterTypes);
+							}
 
+							try
+							{
 								int loc = WriteKey(st, id, offset, session);
-								WriteElementToWhere(st, collection.GetSnapshotElement(entry, i), loc, session);
+								// No columnNullness handling: the element is the entity key and should not contain null
+								// values.
+								WriteElementToWhere(st, collection.GetSnapshotElement(entry, i), null, loc, session);
 								if (useBatch)
 								{
-									session.Batcher.AddToBatch(expectation);
+									session.Batcher.AddToBatch(deleteExpectation);
 								}
 								else
 								{
-									expectation.VerifyOutcomeNonBatched(session.Batcher.ExecuteNonQuery(st), st);
+									deleteExpectation.VerifyOutcomeNonBatched(session.Batcher.ExecuteNonQuery(st), st);
 								}
-								count++;
 							}
-							i++;
+							catch (Exception e)
+							{
+								if (useBatch)
+								{
+									session.Batcher.AbortBatch(e);
+								}
+								throw;
+							}
+							finally
+							{
+								if (!useBatch && st != null)
+								{
+									session.Batcher.CloseCommand(st, null);
+								}
+							}
+							count++;
 						}
-					}
-					catch (Exception e)
-					{
-						if (useBatch)
-						{
-							session.Batcher.AbortBatch(e);
-						}
-						throw;
-					}
-					finally
-					{
-						if (!useBatch && st != null)
-						{
-							session.Batcher.CloseCommand(st, null);
-						}
+						i++;
 					}
 				}
 
 				if (RowInsertEnabled)
 				{
-					IExpectation expectation = Expectations.AppropriateExpectation(InsertCheckStyle);
+					IExpectation insertExpectation = Expectations.AppropriateExpectation(InsertCheckStyle);
 					//bool callable = InsertCallable;
-					bool useBatch = expectation.CanBeBatched;
+					bool useBatch = insertExpectation.CanBeBatched;
 					SqlCommandInfo sql = SqlInsertRowString;
-					IDbCommand st = null;
 
 					// now update all changed or added rows fks
-					try
+					int i = 0;
+					IEnumerable entries = collection.Entries(this);
+					foreach (object entry in entries)
 					{
-						int i = 0;
-						IEnumerable entries = collection.Entries(this);
-						foreach (object entry in entries)
+						if (collection.NeedsUpdating(entry, i, ElementType))
 						{
-							if (collection.NeedsUpdating(entry, i, ElementType))
+							DbCommand st;
+							if (useBatch)
 							{
-								if (useBatch)
-								{
-									if (st == null)
-									{
-										st = session.Batcher.PrepareBatchCommand(SqlInsertRowString.CommandType, sql.Text, SqlInsertRowString.ParameterTypes);
-									}
-								}
-								else
-								{
-									st = session.Batcher.PrepareCommand(SqlInsertRowString.CommandType, sql.Text, SqlInsertRowString.ParameterTypes);
-								}
+								st = session.Batcher.PrepareBatchCommand(SqlInsertRowString.CommandType, sql.Text,
+																		 SqlInsertRowString.ParameterTypes);
+							}
+							else
+							{
+								st = session.Batcher.PrepareCommand(SqlInsertRowString.CommandType, sql.Text,
+																	SqlInsertRowString.ParameterTypes);
+							}
 
-								//offset += expectation.Prepare(st, Factory.ConnectionProvider.Driver);
+							try
+							{
+								//offset += insertExpectation.Prepare(st, Factory.ConnectionProvider.Driver);
 								int loc = WriteKey(st, id, offset, session);
 								if (HasIndex && !indexContainsFormula)
 								{
 									loc = WriteIndexToWhere(st, collection.GetIndex(entry, i, this), loc, session);
 								}
-								WriteElementToWhere(st, collection.GetElement(entry), loc, session);
+								// No columnNullness handling: the element is the entity key and should not contain null
+								// values.
+								WriteElementToWhere(st, collection.GetElement(entry), null, loc, session);
 								if (useBatch)
 								{
-									session.Batcher.AddToBatch(expectation);
+									session.Batcher.AddToBatch(insertExpectation);
 								}
 								else
 								{
-									expectation.VerifyOutcomeNonBatched(session.Batcher.ExecuteNonQuery(st), st);
+									insertExpectation.VerifyOutcomeNonBatched(session.Batcher.ExecuteNonQuery(st), st);
 								}
-								count++;
 							}
-							i++;
+							catch (Exception e)
+							{
+								if (useBatch)
+								{
+									session.Batcher.AbortBatch(e);
+								}
+								throw;
+							}
+							finally
+							{
+								if (!useBatch && st != null)
+								{
+									session.Batcher.CloseCommand(st, null);
+								}
+							}
+							count++;
 						}
-					}
-					catch (Exception e)
-					{
-						if (useBatch)
-						{
-							session.Batcher.AbortBatch(e);
-						}
-						throw;
-					}
-					finally
-					{
-						if (!useBatch && st != null)
-						{
-							session.Batcher.CloseCommand(st, null);
-						}
+						i++;
 					}
 				}
 				return count;
 			}
 			catch (DbException sqle)
 			{
-				throw ADOExceptionHelper.Convert(SQLExceptionConverter, sqle, "could not update collection rows: " + MessageHelper.InfoString(this, id));
+				throw ADOExceptionHelper.Convert(SQLExceptionConverter, sqle, "could not update collection rows: " + MessageHelper.CollectionInfoString(this, collection, id, session));
 			}
 		}
 
-		public override string SelectFragment(IJoinable rhs, string rhsAlias, string lhsAlias, string entitySuffix, string collectionSuffix, bool includeCollectionColumns)
+		public override string SelectFragment(IJoinable rhs, string rhsAlias, string lhsAlias, string entitySuffix, string collectionSuffix, bool includeCollectionColumns, bool fetchLazyProperties)
 		{
 			var buf = new StringBuilder();
 
 			if (includeCollectionColumns)
 			{
 				buf.Append(SelectFragment(lhsAlias, collectionSuffix)).Append(StringHelper.CommaSpace);
+			}
+
+			if (fetchLazyProperties)
+			{
+				var selectMode = ReflectHelper.CastOrThrow<ISupportSelectModeJoinable>(ElementPersister, "fetch lazy properties");
+				if (selectMode != null)
+					return buf.Append(selectMode.SelectFragment(null, null, lhsAlias, entitySuffix, null, false, fetchLazyProperties)).ToString();
 			}
 
 			var ojl = (IOuterJoinLoadable)ElementPersister;
@@ -343,7 +346,7 @@ namespace NHibernate.Persister.Collection
 
 		public override SqlString FromJoinFragment(string alias, bool innerJoin, bool includeSubclasses)
 		{
-			return ((IJoinable)ElementPersister).FromJoinFragment(alias, innerJoin, includeSubclasses);
+			return ((IJoinable) ElementPersister).FromJoinFragment(alias, innerJoin, includeSubclasses);
 		}
 
 		public override SqlString WhereJoinFragment(string alias, bool innerJoin, bool includeSubclasses)

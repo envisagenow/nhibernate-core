@@ -1,17 +1,18 @@
+#if NETFX
 using System;
 using System.Data.Common;
 using NHibernate.Driver;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.DriverTest
 {
+	[TestFixture]
 	public class DbProviderFactoryDriveConnectionCommandProviderTest
 	{
 		[Test]
 		public void WhenCreatedWithNullDbFactoryThenThrows()
 		{
-			Executing.This(() => new DbProviderFactoryDriveConnectionCommandProvider(null)).Should().Throw<ArgumentNullException>();
+			Assert.That(() => new DbProviderFactoryDriveConnectionCommandProvider(null), Throws.TypeOf<ArgumentNullException>());
 		}
 
 		[Test]
@@ -21,7 +22,7 @@ namespace NHibernate.Test.DriverTest
 			var provider = new DbProviderFactoryDriveConnectionCommandProvider(factory);
 			using(var connection =provider.CreateConnection())
 			{
-				connection.Should().Not.Be.Null();
+				Assert.That(connection, Is.Not.Null);
 			}
 		}
 
@@ -32,8 +33,9 @@ namespace NHibernate.Test.DriverTest
 			var provider = new DbProviderFactoryDriveConnectionCommandProvider(factory);
 			using (var command = provider.CreateCommand())
 			{
-				command.Should().Not.Be.Null();
+				Assert.That(command, Is.Not.Null);
 			}
 		}
 	}
 }
+#endif

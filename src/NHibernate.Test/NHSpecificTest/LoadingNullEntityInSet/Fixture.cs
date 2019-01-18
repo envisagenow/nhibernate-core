@@ -11,7 +11,7 @@ namespace NHibernate.Test.NHSpecificTest.LoadingNullEntityInSet
     public class Fixture : TestCase
     {
 
-        protected override IList Mappings
+        protected override string[] Mappings
         {
             get { return new string[] { "NHSpecificTest.LoadingNullEntityInSet.Mappings.hbm.xml" }; }
         }
@@ -21,22 +21,26 @@ namespace NHibernate.Test.NHSpecificTest.LoadingNullEntityInSet
             get { return "NHibernate.Test"; }
         }
 
-		protected override void BuildSessionFactory()
+		protected override bool AppliesTo(Dialect.Dialect dialect)
 		{
-			cfg.GetCollectionMapping(typeof (Employee).FullName + ".Primaries")
-				.CollectionTable.Name = "WantedProfessions";
-			cfg.GetCollectionMapping(typeof (Employee).FullName + ".Secondaries")
-				.CollectionTable.Name = "WantedProfessions";
-			base.BuildSessionFactory();
+			return TestDialect.SupportsEmptyInsertsOrHasNonIdentityNativeGenerator;
 		}
 
-		protected override void OnTearDown()
+		protected override DebugSessionFactory BuildSessionFactory()
 		{
 			cfg.GetCollectionMapping(typeof (Employee).FullName + ".Primaries")
-				.CollectionTable.Name = "WantedProfessions_DUMMY_1";
+				.CollectionTable.Name = "WantedProfessions";
 			cfg.GetCollectionMapping(typeof (Employee).FullName + ".Secondaries")
-				.CollectionTable.Name = "WantedProfessions_DUMMY_2";
-			base.OnTearDown();
+				.CollectionTable.Name = "WantedProfessions";
+			try
+			{
+				return base.BuildSessionFactory();
+			}
+			finally
+			{
+				// Restore configuration.
+				Configure();
+			}
 		}
 
         [Test]

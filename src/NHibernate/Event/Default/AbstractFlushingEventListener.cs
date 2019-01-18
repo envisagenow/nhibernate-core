@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 using NHibernate.Action;
@@ -16,9 +17,9 @@ namespace NHibernate.Event.Default
 	/// A convenience base class for listeners whose functionality results in flushing.
 	/// </summary>
 	[Serializable]
-	public abstract class AbstractFlushingEventListener
+	public abstract partial class AbstractFlushingEventListener
 	{
-		private static readonly IInternalLogger log = LoggerProvider.LoggerFor(typeof (AbstractFlushingEventListener));
+		private static readonly INHibernateLogger log = NHibernateLogger.For(typeof (AbstractFlushingEventListener));
 
 		protected virtual object Anything
 		{
@@ -66,21 +67,22 @@ namespace NHibernate.Event.Default
 			}
 
 			//some statistics
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
-				StringBuilder sb = new StringBuilder(100);
+				log.Debug(
+					"Flushed: {0} insertions, {1} updates, {2} deletions to {3} objects",
+					session.ActionQueue.InsertionsCount,
+					session.ActionQueue.UpdatesCount,
+					session.ActionQueue.DeletionsCount,
+					persistenceContext.EntityEntries.Count);
 
-				sb.Append("Flushed: ").Append(session.ActionQueue.InsertionsCount).Append(" insertions, ").Append(
-					session.ActionQueue.UpdatesCount).Append(" updates, ").Append(session.ActionQueue.DeletionsCount).Append(
-					" deletions to ").Append(persistenceContext.EntityEntries.Count).Append(" objects");
-				log.Debug(sb.ToString());
-				sb = new StringBuilder(100);
-				sb.Append("Flushed: ").Append(session.ActionQueue.CollectionCreationsCount).Append(" (re)creations, ").Append(
-					session.ActionQueue.CollectionUpdatesCount).Append(" updates, ").Append(session.ActionQueue.CollectionRemovalsCount)
-					.Append(" removals to ").Append(persistenceContext.CollectionEntries.Count).Append(" collections");
-
-				log.Debug(sb.ToString());
-				new Printer(session.Factory).ToString(persistenceContext.EntitiesByKey.Values.GetEnumerator(), session.EntityMode);
+				log.Debug(
+					"Flushed: {0} (re)creations, {1} updates, {2} removals to {3} collections",
+					session.ActionQueue.CollectionCreationsCount,
+					session.ActionQueue.CollectionUpdatesCount,
+					session.ActionQueue.CollectionRemovalsCount,
+					persistenceContext.CollectionEntries.Count);
+				new Printer(session.Factory).ToString(persistenceContext.EntitiesByKey.Values.ToArray());
 			}
 		}
 
@@ -224,9 +226,10 @@ namespace NHibernate.Event.Default
 		/// <item> <description>Deletes, in the order they were performed</description> </item>
 		/// </list>
 		/// </summary>
+		/// <param name="session">The session being flushed</param>
 		protected virtual void PerformExecutions(IEventSource session)
 		{
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
 				log.Debug("executing flush");
 			}
@@ -234,6 +237,11 @@ namespace NHibernate.Event.Default
 			try
 			{
 				session.ConnectionManager.FlushBeginning();
+				// IMPL NOTE : here we alter the flushing flag of the persistence context to allow
+				//		during-flush callbacks more leniency in regards to initializing proxies and
+				//		lazy collections during their processing.
+				// For more information, see HHH-2763 / NH-1882
+				session.PersistenceContext.Flushing = true;
 				// we need to lock the collection caches before
 				// executing entity inserts/updates in order to
 				// account for bidi associations
@@ -242,14 +250,15 @@ namespace NHibernate.Event.Default
 			}
 			catch (HibernateException he)
 			{
-				if (log.IsErrorEnabled)
+				if (log.IsErrorEnabled())
 				{
-					log.Error("Could not synchronize database state with session", he);
+					log.Error(he, "Could not synchronize database state with session");
 				}
 				throw;
 			}
 			finally
 			{
+				session.PersistenceContext.Flushing = false;
 				session.ConnectionManager.FlushEnding();
 			}
 		}
@@ -261,7 +270,7 @@ namespace NHibernate.Event.Default
 		/// </summary>
 		protected virtual void PostFlush(ISessionImplementor session)
 		{
-			if (log.IsDebugEnabled)
+			if (log.IsDebugEnabled())
 			{
 				log.Debug("post flush");
 			}
@@ -288,7 +297,7 @@ namespace NHibernate.Event.Default
 				{
 					//otherwise recreate the mapping between the collection and its key
 					CollectionKey collectionKey =
-						new CollectionKey(collectionEntry.LoadedPersister, collectionEntry.LoadedKey, session.EntityMode);
+						new CollectionKey(collectionEntry.LoadedPersister, collectionEntry.LoadedKey);
 					persistenceContext.CollectionsByKey[collectionKey] = persistentCollection;
 				}
 			}

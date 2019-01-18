@@ -1,4 +1,3 @@
-using System;
 using NUnit.Framework;
 
 namespace NHibernate.Test.NHSpecificTest.NH643
@@ -6,9 +5,9 @@ namespace NHibernate.Test.NHSpecificTest.NH643
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
-		public override string BugNumber
+		protected override bool AppliesTo(Dialect.Dialect dialect)
 		{
-			get { return "NH643"; }
+			return TestDialect.SupportsEmptyInsertsOrHasNonIdentityNativeGenerator;
 		}
 
 		private object parentId;
@@ -45,7 +44,7 @@ namespace NHibernate.Test.NHSpecificTest.NH643
 			using (ISession session = OpenSession())
 			using (ITransaction tx = session.BeginTransaction())
 			{
-				session.Delete(session.Get(typeof(Parent), parentId));
+				session.Delete(session.Get<Parent>(parentId));
 				tx.Commit();
 			}
 		}
@@ -55,7 +54,7 @@ namespace NHibernate.Test.NHSpecificTest.NH643
 			using (ISession session = OpenSession())
 			using (ITransaction tx = session.BeginTransaction())
 			{
-				Parent parent = (Parent) session.Get(typeof(Parent), 1);
+				var parent = session.Get<Parent>(parentId);
 				Child child = new Child();
 				parent.AddChild(child);
 				NHibernateUtil.Initialize(parent.Children);
@@ -67,7 +66,7 @@ namespace NHibernate.Test.NHSpecificTest.NH643
 		{
 			using (ISession session = OpenSession())
 			{
-				Parent parent = (Parent) session.Get(typeof(Parent), 1);
+				var parent = session.Get<Parent>(parentId);
 				Assert.AreEqual(count, parent.Children.Count);
 			}
 		}

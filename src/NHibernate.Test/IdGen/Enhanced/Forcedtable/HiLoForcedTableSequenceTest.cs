@@ -7,7 +7,7 @@ namespace NHibernate.Test.IdGen.Enhanced.Forcedtable
 	[TestFixture]
 	public class HiLoForcedTableSequenceTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new[] { "IdGen.Enhanced.Forcedtable.HiLo.hbm.xml" }; }
 		}
@@ -20,7 +20,7 @@ namespace NHibernate.Test.IdGen.Enhanced.Forcedtable
 		[Test]
 		public void TestNormalBoundary()
 		{
-			var persister = sessions.GetEntityPersister(typeof(Entity).FullName);
+			var persister = Sfi.GetEntityPersister(typeof(Entity).FullName);
 			Assert.That(persister.IdentifierGenerator, Is.TypeOf<SequenceStyleGenerator>());
 
 			var generator = (SequenceStyleGenerator)persister.IdentifierGenerator;

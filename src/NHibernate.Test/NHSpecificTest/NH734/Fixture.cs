@@ -6,15 +6,10 @@ namespace NHibernate.Test.NHSpecificTest.NH734
 	[TestFixture]
 	public class Fixture : BugTestCase
 	{
-		public override string BugNumber
-		{
-			get { return "NH734"; }
-		}
-
 		[TestAttribute]
 		public void LimitProblem()
 		{
-			using (ISession session = sessions.OpenSession())
+			using (ISession session = Sfi.OpenSession())
 			{
 				ICriteria criteria = session.CreateCriteria(typeof(MyClass));
 				criteria.SetMaxResults(100);

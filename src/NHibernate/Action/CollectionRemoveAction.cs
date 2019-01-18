@@ -8,7 +8,7 @@ using NHibernate.Persister.Collection;
 namespace NHibernate.Action
 {
 	[Serializable]
-	public sealed class CollectionRemoveAction : CollectionAction
+	public sealed partial class CollectionRemoveAction : CollectionAction
 	{
 		private readonly bool emptySnapshot;
 		private readonly object affectedOwner;
@@ -68,13 +68,14 @@ namespace NHibernate.Action
 
 			if (!emptySnapshot)
 			{
-				Persister.Remove(Key, Session);
+				Persister.Remove(GetKey(), Session);
 			}
 
 			IPersistentCollection collection = Collection;
 			if (collection != null)
 			{
-				Session.PersistenceContext.GetCollectionEntry(collection).AfterAction(collection);
+				var entry = Session.PersistenceContext.GetCollectionEntry(collection);
+				entry.AfterAction(collection);
 			}
 
 			Evict();

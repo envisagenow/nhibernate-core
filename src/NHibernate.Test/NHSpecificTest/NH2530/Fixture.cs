@@ -3,10 +3,10 @@ using System.Text;
 using NHibernate.Dialect;
 using NHibernate.Mapping;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.NHSpecificTest.NH2530
 {
+	[TestFixture]
 	public class Fixture: BugTestCase
 	{
 		protected override void Configure(Cfg.Configuration configuration)
@@ -47,7 +47,7 @@ namespace NHibernate.Test.NHSpecificTest.NH2530
 			using (var tx = session.BeginTransaction())
 			{
 				var customer = new Customer { Name = "Mengano" };
-				session.Executing(s => s.Persist(customer)).Throws().And.ValueOf.Message.Should().Contain("Entity = 'Customer'");
+				Assert.That(() => session.Persist(customer), Throws.Exception.Message.Contains("Entity = 'Customer'"));
 			}
 		}
 	}

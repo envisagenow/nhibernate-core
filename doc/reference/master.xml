@@ -8,6 +8,7 @@
 <!ENTITY persistent-classes     SYSTEM "modules/persistent_classes.xml">
 <!ENTITY basic-mapping          SYSTEM "modules/basic_mapping.xml">
 <!ENTITY collection-mapping     SYSTEM "modules/collection_mapping.xml">
+<!ENTITY associations           SYSTEM "modules/associations.xml">
 <!ENTITY component-mapping      SYSTEM "modules/component_mapping.xml">
 <!ENTITY inheritance-mapping    SYSTEM "modules/inheritance_mapping.xml">
 <!ENTITY manipulating-data      SYSTEM "modules/manipulating_data.xml">
@@ -17,6 +18,7 @@
 <!ENTITY query-hql              SYSTEM "modules/query_hql.xml">
 <!ENTITY query-criteria         SYSTEM "modules/query_criteria.xml">
 <!ENTITY query-queryover        SYSTEM "modules/query_queryover.xml">
+<!ENTITY query-linq             SYSTEM "modules/query_linq.xml">
 <!ENTITY query-sql              SYSTEM "modules/query_sql.xml">
 <!ENTITY filters                SYSTEM "modules/filters.xml">
 <!ENTITY performance            SYSTEM "modules/performance.xml">
@@ -30,8 +32,6 @@
 <!ENTITY nhc-preface            SYSTEM "modules/nhibernatecontrib_preface.xml">
 <!ENTITY nhcaches-chapter       SYSTEM "modules/nhibernate_caches.xml">
 <!ENTITY nhma-chapter           SYSTEM "modules/nhibernate_mapping_attributes.xml">
-<!ENTITY nhbm2net-chapter       SYSTEM "modules/nhibernate_tool_hbm2net.xml">
-<!ENTITY nullables-chapter      SYSTEM "modules/nullables.xml">
 ]>
 
 
@@ -39,7 +39,7 @@
 	<bookinfo>
 		<title>NHibernate - Relational Persistence for Idiomatic .NET</title>
 		<subtitle>NHibernate Reference Documentation</subtitle>
-		<releaseinfo>3.3</releaseinfo>
+		<releaseinfo>5.2</releaseinfo>
 	</bookinfo>
 
 	<toc />
@@ -56,6 +56,7 @@
 	
 	&basic-mapping;
 	&collection-mapping;
+	&associations;
 	&component-mapping;
 	&inheritance-mapping;
 	
@@ -67,6 +68,7 @@
 	&query-hql;
 	&query-criteria;
 	&query-queryover;
+	&query-linq;
 	&query-sql;
 
 	&filters;

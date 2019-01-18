@@ -13,7 +13,7 @@ namespace NHibernate.Test.GenericTest.MapGeneric
 	[TestFixture]
 	public class MapGenericFixture : TestCase
 	{
-		protected override System.Collections.IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] { "GenericTest.MapGeneric.MapGenericFixture.hbm.xml" }; }
 		}
@@ -25,7 +25,7 @@ namespace NHibernate.Test.GenericTest.MapGeneric
 
 		protected override void OnTearDown()
 		{
-			using( ISession s = sessions.OpenSession() )
+			using( ISession s = Sfi.OpenSession() )
 			{
 				s.Delete( "from A" );
 				s.Flush();
@@ -206,7 +206,7 @@ namespace NHibernate.Test.GenericTest.MapGeneric
 			{
 				a = s.Load<A>( a.Id );
 
-				ISessionFactoryImplementor si = (ISessionFactoryImplementor)sessions;
+				ISessionFactoryImplementor si = (ISessionFactoryImplementor)Sfi;
 				ICollectionPersister cpSortedList = si.GetCollectionPersister(typeof(A).FullName + ".SortedList");
 				ICollectionPersister cpSortedDictionary = si.GetCollectionPersister(typeof(A).FullName + ".SortedDictionary");
 

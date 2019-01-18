@@ -16,15 +16,16 @@ namespace NHibernate.Engine.Query
 		}
 
 		private static readonly Regex functionNameFinder = new Regex(@"\{[\S\s]*call[\s]+([\w\.]+)[^\w]");
-		private static readonly int NewLineLength = Environment.NewLine.Length;
 
 		public static Detail Parse(string sqlString)
 		{
 			Detail callableDetail = new Detail();
 
-			callableDetail.IsCallable = sqlString.IndexOf("{") == 0 &&
-										sqlString.IndexOf("}") == (sqlString.Length - 1) &&
-										sqlString.IndexOf("call") > 0;
+			int indexOfCall = -1;
+			callableDetail.IsCallable = sqlString.Length > 5 && // to be able to check sqlString[0] we at least need to make sure that string has at least 1 character. The simplest case all other conditions are true is "{call}" which is 6 characters, so check it.
+										sqlString[0] == '{' &&
+										sqlString[sqlString.Length - 1] == '}' &&
+										(indexOfCall = sqlString.IndexOf("call", StringComparison.Ordinal)) > 0;
 
 			if (!callableDetail.IsCallable)
 				return callableDetail;
@@ -36,13 +37,20 @@ namespace NHibernate.Engine.Query
 
 			callableDetail.FunctionName = functionMatch.Groups[1].Value;
 
-			callableDetail.HasReturn = sqlString.IndexOf("call") > 0 &&
-										sqlString.IndexOf("?") > 0 &&
-										sqlString.IndexOf("=") > 0 &&
-										sqlString.IndexOf("?") < sqlString.IndexOf("call") &&
-										sqlString.IndexOf("=") < sqlString.IndexOf("call");
+			callableDetail.HasReturn = HasReturnParameter(sqlString, indexOfCall);
 
 			return callableDetail;
+		}
+
+		internal static bool HasReturnParameter(string sqlString, int indexOfCall)
+		{
+			int indexOfQuestionMark;
+			int indexOfEqual;
+			return indexOfCall > 0 &&
+					(indexOfQuestionMark = sqlString.IndexOf('?')) > 0 &&
+					(indexOfEqual = sqlString.IndexOf('=')) > 0 &&
+					indexOfQuestionMark < indexOfCall &&
+					indexOfEqual < indexOfCall;
 		}
 	}
 }

@@ -3,6 +3,7 @@ using NHibernate.AdoNet;
 using NHibernate.Connection;
 using NHibernate.Driver;
 using NHibernate.Exceptions;
+using NHibernate.Linq.Visitors;
 using NHibernate.Transaction;
 
 namespace NHibernate.Cfg.Loquacious
@@ -28,6 +29,9 @@ namespace NHibernate.Cfg.Loquacious
 		void TransactionFactory<TFactory>() where TFactory : ITransactionFactory;
 
 		bool PrepareCommands { set; }
+		/// <summary>
+		/// Set the default timeout in seconds for ADO.NET queries.
+		/// </summary>
 		byte Timeout { set; }
 		void ExceptionConverter<TExceptionConverter>() where TExceptionConverter : ISQLExceptionConverter;
 		bool AutoCommentSql { set; }
@@ -35,5 +39,7 @@ namespace NHibernate.Cfg.Loquacious
 		byte MaximumDepthOfOuterJoinFetching { set; }
 
 		SchemaAutoAction SchemaAction { set; }
+
+		void QueryModelRewriterFactory<TFactory>() where TFactory : IQueryModelRewriterFactory;
 	}
 }

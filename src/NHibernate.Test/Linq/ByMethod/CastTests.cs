@@ -1,37 +1,42 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using NHibernate.DomainModel.Northwind.Entities;
+using NHibernate.Exceptions;
 using NHibernate.Linq;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.Linq.ByMethod
 {
+	[TestFixture]
 	public class CastTests : LinqTestCase
 	{
 		[Test]
 		public void CastCount()
 		{
-			session.Query<Cat>()
-				.Cast<Animal>()
-				.Count().Should().Be(1);
+			Assert.That(session.Query<Cat>()
+							   .Cast<Animal>()
+							   .Count(), Is.EqualTo(1));
 		}
 
 		[Test]
 		public void CastWithWhere()
 		{
 			var pregnatMammal = (from a
-			                      	in session.Query<Animal>().Cast<Cat>()
-			                      where a.Pregnant
-			                      select a).FirstOrDefault();
-			pregnatMammal.Should().Not.Be.Null();
+									in session.Query<Animal>().Cast<Cat>()
+								  where a.Pregnant
+								  select a).FirstOrDefault();
+			Assert.That(pregnatMammal, Is.Not.Null);
 		}
 
 		[Test]
 		public void CastDowncast()
 		{
 			var query = session.Query<Mammal>().Cast<Dog>();
+			List<Dog> list;
 			// the list contains at least one Cat then should Throws
-			query.Executing(q=> q.ToList()).Throws();
+			// Do not use bare Throws.Exception due to https://github.com/nunit/nunit/issues/1899
+			Assert.That(() => list = query.ToList(), Throws.InstanceOf<GenericADOException>());
 		}
 
 		[Test]
@@ -39,7 +44,7 @@ namespace NHibernate.Test.Linq.ByMethod
 		{
 			// NH-2657
 			var query = session.Query<Dog>().Cast<Animal>().OrderBy(a=> a.BodyWeight);
-			query.Executing(q => q.ToList()).NotThrows();
+			Assert.That(() => query.ToList(), Throws.Nothing);
 		}
 
 		[Test, Ignore("Not fixed yet. The method OfType does not work as expected.")]
@@ -47,7 +52,8 @@ namespace NHibernate.Test.Linq.ByMethod
 		{
 			var query = session.Query<Animal>().OfType<Mammal>().Cast<Dog>();
 			// the list contains at least one Cat then should Throws
-			query.Executing(q => q.ToList()).Throws();
+			// Do not use bare Throws.Exception due to https://github.com/nunit/nunit/issues/1899
+			Assert.That(() => query.ToList(), Throws.InstanceOf<Exception>());
 		}
 	}
 }

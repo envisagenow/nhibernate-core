@@ -21,7 +21,7 @@ namespace NHibernate.Test.ReadOnly
 			get { return "NHibernate.Test"; }
 		}
 
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get
 			{
@@ -30,7 +30,7 @@ namespace NHibernate.Test.ReadOnly
 				if (TextHolder.SupportedForDialect(Dialect))
 					mappings.Add("ReadOnly.TextHolder.hbm.xml");
 
-				return mappings;
+				return mappings.ToArray();
 			}
 		}
 		
@@ -67,7 +67,7 @@ namespace NHibernate.Test.ReadOnly
 				Assert.That(NHibernateUtil.IsInitialized(dp), Is.False, "was initialized during isReadOnly");
 				dp.Description = "changed";
 				Assert.That(NHibernateUtil.IsInitialized(dp), Is.True, "was not initialized during mod");
-				Assert.That(dp.Description, Is.StringMatching("changed"), "desc not changed in memory");
+				Assert.That(dp.Description, Is.EqualTo("changed"), "desc not changed in memory");
 				s.Flush();
 				s.Transaction.Commit();
 			}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using NHibernate.Dialect;
 using NHibernate.DomainModel;
 using NUnit.Framework;
@@ -12,7 +13,7 @@ namespace NHibernate.Test.Legacy
 	[TestFixture]
 	public class ABCTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get { return new string[] {"ABC.hbm.xml"}; }
 		}
@@ -38,11 +39,13 @@ namespace NHibernate.Test.Legacy
 		[Test]
 		public void Subselect()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore("Dialect does not support scalar sub-select, used by Map formula in B (C1 and C2) mapping");
 			using (ISession s = OpenSession())
 			using (ITransaction t = s.BeginTransaction())
 			{
 				B b = new B();
-				IDictionary map = new Hashtable();
+				IDictionary<string, string> map = new Dictionary<string, string>();
 				map["a"] = "a";
 				map["b"] = "b";
 				b.Map = map;
@@ -77,6 +80,8 @@ namespace NHibernate.Test.Legacy
 		[Test]
 		public void Subclassing()
 		{
+			if (!Dialect.SupportsScalarSubSelects)
+				Assert.Ignore("Dialect does not support scalar sub-select, used by Map formula in B (C1 and C2) mapping");
 			ISession s = OpenSession();
 			ITransaction t = s.BeginTransaction();
 			C1 c1 = new C1();

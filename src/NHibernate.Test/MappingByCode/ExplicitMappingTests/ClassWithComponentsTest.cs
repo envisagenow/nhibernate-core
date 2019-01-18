@@ -3,10 +3,10 @@ using System.Linq;
 using NHibernate.Cfg.MappingSchema;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
-using SharpTestsEx;
 
 namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 {
+	[TestFixture]
 	public class ClassWithComponentsTest
 	{
 		public class Person1
@@ -54,8 +54,8 @@ namespace NHibernate.Test.MappingByCode.ExpliticMappingTests
 			var hbmClass = hbmMapping.RootClasses[0];
 
 			var hbmComponents = hbmClass.Properties.OfType<HbmComponent>();
-			hbmComponents.Should().Have.Count.EqualTo(2);
-			hbmComponents.Select(x => x.Name).Should().Have.SameValuesAs("Name","Address");
+			Assert.That(hbmComponents.Count(), Is.EqualTo(2));
+			Assert.That(hbmComponents.Select(x => x.Name), Is.EquivalentTo(new [] {"Name", "Address"}));
 		} 
 	}
 }

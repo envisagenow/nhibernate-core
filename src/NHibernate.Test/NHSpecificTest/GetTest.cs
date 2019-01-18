@@ -7,7 +7,7 @@ namespace NHibernate.Test.NHSpecificTest
 	[TestFixture]
 	public class GetTest : TestCase
 	{
-		protected override IList Mappings
+		protected override string[] Mappings
 		{
 			get
 			{
@@ -19,7 +19,7 @@ namespace NHibernate.Test.NHSpecificTest
 
 		protected override void OnTearDown()
 		{
-			using (ISession s = sessions.OpenSession())
+			using (ISession s = Sfi.OpenSession())
 			{
 				s.Delete("from A");
 				s.Flush();
